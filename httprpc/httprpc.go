@@ -1,4 +1,4 @@
-package rpc
+package httprpc
 
 import (
 	"bytes"
@@ -28,6 +28,11 @@ type RPCClient struct {
 }
 
 type GetBlockReply struct {
+	Number     string `json:"number"`
+	Difficulty string `json:"difficulty"`
+}
+
+type GetBlockReplyPart struct {
 	Number     string `json:"number"`
 	Difficulty string `json:"difficulty"`
 }

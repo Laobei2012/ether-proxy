@@ -29,6 +29,11 @@ Install required packages:
     go get github.com/goji/httpauth
     go get github.com/gorilla/mux
     go get github.com/yvasiyarov/gorelic
+    go get github.com/aristanetworks/goarista/monotime
+    go get github.com/deckarep/golang-set
+    go get github.com/go-stack/stack
+    go get github.com/gorilla/websocket
+    go get github.com/shirou/gopsutil/cpu
 
 Compile:
 

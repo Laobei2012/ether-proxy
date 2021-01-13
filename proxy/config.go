@@ -5,6 +5,7 @@ type Config struct {
 	Frontend              Frontend   `json:"frontend"`
 	Upstream              []Upstream `json:"upstream"`
 	UpstreamCheckInterval string     `json:"upstreamCheckInterval"`
+	UpstreamProto         string     `json:"upstreamProto"`
 
 	Threads int `json:"threads"`
 
@@ -22,6 +23,18 @@ type Proxy struct {
 	SubmitHashrate       bool   `json:"submitHashrate"`
 	LuckWindow           string `json:"luckWindow"`
 	LargeLuckWindow      string `json:"largeLuckWindow"`
+
+	MaxFails    int64 `json:"maxFails"`
+	HealthCheck bool  `json:"healthCheck"`
+
+	Stratum Stratum `json:"stratum"`
+}
+
+type Stratum struct {
+	Enabled bool   `json:"enabled"`
+	Listen  string `json:"listen"`
+	Timeout string `json:"timeout"`
+	MaxConn int    `json:"maxConn"`
 }
 
 type Frontend struct {
@@ -33,6 +46,10 @@ type Frontend struct {
 type Upstream struct {
 	Name    string `json:"name"`
 	Url     string `json:"url"`
+	Scheme  string
+	Host    string
+	Port    string
+	User    string
 	Timeout string `json:"timeout"`
 	Pool    bool   `json:"pool"`
 }

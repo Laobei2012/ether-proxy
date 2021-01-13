@@ -1,7 +1,6 @@
 package proxy
 
 import (
-	"../util"
 	"log"
 	"math/big"
 	"strconv"
@@ -10,11 +9,12 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/ethereum/ethash"
+	"../util"
+
 	"github.com/ethereum/go-ethereum/common"
 )
 
-var hasher = ethash.New()
+// var hasher = ethash.New()
 
 type Miner struct {
 	sync.RWMutex
@@ -120,7 +120,7 @@ func (m *Miner) processShare(s *ProxyServer, t *BlockTemplate, diff string, para
 		mixDigest:   common.HexToHash(mixDigest),
 	}
 
-	if hasher.Verify(share) {
+	if s.Hasher.Verify(share) {
 		m.heartbeat()
 		m.storeShare(shareDiff.Int64())
 		atomic.AddUint64(&m.validShares, 1)
@@ -135,7 +135,7 @@ func (m *Miner) processShare(s *ProxyServer, t *BlockTemplate, diff string, para
 		return false
 	}
 
-	if rpc.Pool || hasher.Verify(block) {
+	if rpc.Pool || s.Hasher.Verify(block) {
 		_, err = rpc.SubmitBlock(paramsOrig)
 		now := util.MakeTimestamp()
 		if err != nil {
@@ -145,7 +145,7 @@ func (m *Miner) processShare(s *ProxyServer, t *BlockTemplate, diff string, para
 		} else {
 			if !rpc.Pool {
 				// Solo block found, must refresh job
-				s.fetchBlockTemplate()
+				s.fetchBlockTemplate(nil)
 
 				// Log this round variance
 				roundShares := atomic.SwapInt64(&s.roundShares, 0)

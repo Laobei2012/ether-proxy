@@ -1,12 +1,18 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"log"
+	"net"
 	"net/http"
+	"net/rpc/jsonrpc"
+	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
+	"time"
 
 	"./proxy"
 
@@ -17,7 +23,7 @@ import (
 
 var cfg proxy.Config
 
-func startProxy() {
+func startProxy() *proxy.ProxyServer {
 	if cfg.Threads > 0 {
 		runtime.GOMAXPROCS(cfg.Threads)
 		log.Printf("Running with %v threads", cfg.Threads)
@@ -27,16 +33,19 @@ func startProxy() {
 		log.Printf("Running with default %v threads", n)
 	}
 
-	r := mux.NewRouter()
 	s := proxy.NewEndpoint(&cfg)
 
-	go startFrontend(&cfg, s)
+	go func() {
+		startFrontend(&cfg, s)
 
-	r.Handle("/miner/{diff:.+}/{id:.+}", s)
-	err := http.ListenAndServe(cfg.Proxy.Listen, r)
-	if err != nil {
-		log.Fatal(err)
-	}
+		r := mux.NewRouter()
+		r.Handle("/miner/{diff:.+}/{id:.+}", s)
+		err := http.ListenAndServe(cfg.Proxy.Listen, r)
+		if err != nil {
+			log.Fatal(err)
+		}
+	}()
+	return s
 }
 
 func startFrontend(cfg *proxy.Config, s *proxy.ProxyServer) {
@@ -82,10 +91,127 @@ func readConfig(cfg *proxy.Config) {
 	if err = jsonParser.Decode(&cfg); err != nil {
 		log.Fatal("Config error: ", err.Error())
 	}
+
+	for i, v := range cfg.Upstream {
+		u, err := url.Parse(v.Url)
+		if err != nil {
+			panic(err)
+		}
+		cfg.Upstream[i].Scheme = u.Scheme
+		cfg.Upstream[i].User = u.User.Username()
+		h := strings.Split(u.Host, ":")
+		cfg.Upstream[i].Host = h[0]
+		cfg.Upstream[i].Port = h[1]
+		// fmt.Println(cfg.Upstream[i])
+	}
+}
+
+var ctx = context.Background()
+
+func startPool(server *proxy.ProxyServer) {
+	pool := cfg.Upstream[0]
+	endChan := make(chan int, 1)
+
+	for {
+		conn, err := net.DialTimeout("tcp", pool.Host+":"+pool.Port, 1000*1000*1000*30)
+		if err != nil {
+			os.Exit(-1)
+		}
+		log.Printf("connected %v:%v", pool.Host, pool.Port)
+
+		// ch := channel.RawJSON(conn, conn)
+		// cli := jrpc2.NewClient(ch, &jrpc2.ClientOptions{
+		// 	OnNotify: func(req *jrpc2.Request) {
+		// 		// notes = append(notes, req.Method())
+		// 		log.Printf("OnNotify handler saw method %q", req.Method())
+		// 	}}) // nil for default options
+
+		// var params = [2]string{"sp_miner2020", "X"}
+		// var replyBool bool
+		// err = cli.CallResult(ctx, "eth_submitLogin", params, &replyBool)
+		// if err != nil {
+		// 	log.Fatal("rpc call error: ", err)
+		// }
+		// log.Printf("return: %v", replyBool)
+
+		// // var replyArray []interface{}
+		// rsp, err := cli.Call(ctx, "eth_getWork", nil)
+		// if err != nil {
+		// 	log.Fatal("rpc call error: ", err)
+		// }
+		// log.Printf("return: %v", rsp)
+		// log.Printf("return: %v", replyArray)
+
+		// for {
+		// 	rsp.wait()
+		// 	log.Printf("return: %v", rsp)
+		// }
+
+		clientRPC := jsonrpc.NewClient(conn)
+		server.UpstreamTCP = clientRPC
+
+		// var params = "sp_miner2020"
+		var replyBool bool
+		err = clientRPC.Call("eth_submitLogin", []string{pool.User}, &replyBool)
+		if err != nil {
+			log.Fatal("rpc call error: ", err)
+		}
+		log.Printf("return: %v", replyBool)
+
+		var replyArray []interface{}
+		err = clientRPC.Call("eth_getWork", []string{""}, &replyArray)
+		if err != nil {
+			log.Fatal("rpc call error: ", err)
+		}
+		log.Printf("return: %v", replyArray)
+		/*/
+		var clientInfo = [...]string{"ethminer-0.19.0", "EthereumStratum/1.0.0"}
+		var subscribeReply []interface{}
+		var replyBool bool
+
+		err = clientRPC.Call("mining.subscribe", clientInfo, &subscribeReply)
+		if err != nil {
+			log.Fatal("rpc call error: ", err)
+		}
+		poolExtraNonce := subscribeReply[1]
+		log.Printf("mining.subscribe return: %v, poolExtraNonce: %v", subscribeReply, poolExtraNonce)
+
+		err = clientRPC.Call("mining.authorize", pool.User, &replyBool)
+		if err != nil {
+			log.Fatal("rpc call error: ", err)
+		}
+		log.Printf("mining.authorize return: %v", replyBool)
+		/*/
+
+		go func() {
+			for {
+				select {
+				case rep := <-clientRPC.PushChan:
+					server.OnPoolNotify(rep)
+					// log.Println("recv: ", rep)
+				case <-time.After(300 * time.Second):
+					// todo : move time out to config file
+					log.Println("recv timeout")
+					endChan <- 1
+					return
+				}
+			}
+		}()
+		_ = <-endChan
+		clientRPC.Close()
+		conn.Close()
+	}
+	// fmt.Printf("return : %v %T", reply[0].([]interface{})[0], reply[0])
 }
 
 func main() {
+	// var hasher = ethash.New()
+	// x := hasher.MakeSeedHash(10757149 / 30000)
+
+	// log.Printf("seedhash, %v ", x)
+
 	readConfig(&cfg)
-	startNewrelic()
-	startProxy()
+	// startNewrelic()
+	s := startProxy()
+	startPool(s)
 }

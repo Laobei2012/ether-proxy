@@ -6,7 +6,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"../rpc"
+	"../httprpc"
 	"../util"
 )
 
@@ -44,7 +44,7 @@ func (s *ProxyServer) StatsIndex(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(stats)
 }
 
-func convertUpstream(u *rpc.RPCClient) map[string]interface{} {
+func convertUpstream(u *httprpc.RPCClient) map[string]interface{} {
 	upstream := map[string]interface{}{
 		"name":             u.Name,
 		"url":              u.Url.String(),

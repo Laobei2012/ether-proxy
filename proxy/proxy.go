@@ -4,16 +4,21 @@ import (
 	"bufio"
 	"encoding/json"
 	"errors"
-	"github.com/gorilla/mux"
 	"io"
 	"log"
 	"net"
 	"net/http"
+	"net/rpc"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	"../rpc"
+	"github.com/ethereum/ethash"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/gorilla/mux"
+
+	"../httprpc"
+	"../util"
 )
 
 type ProxyServer struct {
@@ -21,7 +26,7 @@ type ProxyServer struct {
 	miners          MinersMap
 	blockTemplate   atomic.Value
 	upstream        int32
-	upstreams       []*rpc.RPCClient
+	upstreams       []*httprpc.RPCClient
 	hashrateWindow  time.Duration
 	timeout         time.Duration
 	roundShares     int64
@@ -29,11 +34,28 @@ type ProxyServer struct {
 	blockStats      map[int64]float64
 	luckWindow      int64
 	luckLargeWindow int64
+
+	diff       string
+	failsCount int64
+
+	sessionsMu sync.RWMutex
+	sessions   map[*Session]struct{}
+
+	Jobs        util.Cache_fifo
+	UpstreamTCP *rpc.Client
+	Hasher      *ethash.Ethash
+	SeedHashs   map[common.Hash]uint64
 }
 
 type Session struct {
 	enc *json.Encoder
 	ip  string
+
+	// Stratum
+	sync.Mutex
+	conn    *net.TCPConn
+	login   string
+	exNonce string
 }
 
 const (
@@ -41,21 +63,15 @@ const (
 )
 
 func NewEndpoint(cfg *Config) *ProxyServer {
-	proxy := &ProxyServer{config: cfg, blockStats: make(map[int64]float64)}
-
-	proxy.upstreams = make([]*rpc.RPCClient, len(cfg.Upstream))
-	for i, v := range cfg.Upstream {
-		client, err := rpc.NewRPCClient(v.Name, v.Url, v.Timeout, v.Pool)
-		if err != nil {
-			log.Fatal(err)
-		} else {
-			proxy.upstreams[i] = client
-			log.Printf("Upstream: %s => %s", v.Name, v.Url)
-		}
-	}
-	log.Printf("Default upstream: %s => %s", proxy.rpc().Name, proxy.rpc().Url)
-
+	proxy := &ProxyServer{config: cfg, blockStats: make(map[int64]float64), SeedHashs: make(map[common.Hash]uint64)}
+	proxy.Jobs.Init(100)
+	proxy.Hasher = ethash.New()
 	proxy.miners = NewMinersMap()
+
+	for i := uint64(385); i <= 400; i++ {
+		seedhash := proxy.Hasher.MakeSeedHash(i)
+		proxy.SeedHashs[seedhash] = i
+	}
 
 	timeout, _ := time.ParseDuration(cfg.Proxy.ClientTimeout)
 	proxy.timeout = timeout
@@ -68,8 +84,12 @@ func NewEndpoint(cfg *Config) *ProxyServer {
 	luckLargeWindow, _ := time.ParseDuration(cfg.Proxy.LargeLuckWindow)
 	proxy.luckLargeWindow = int64(luckLargeWindow / time.Millisecond)
 
+	if cfg.Proxy.Stratum.Enabled {
+		proxy.sessions = make(map[*Session]struct{})
+		go proxy.ListenTCP()
+	}
+
 	proxy.blockTemplate.Store(&BlockTemplate{})
-	proxy.fetchBlockTemplate()
 
 	refreshIntv, _ := time.ParseDuration(cfg.Proxy.BlockRefreshInterval)
 	refreshTimer := time.NewTimer(refreshIntv)
@@ -78,15 +98,35 @@ func NewEndpoint(cfg *Config) *ProxyServer {
 	checkIntv, _ := time.ParseDuration(cfg.UpstreamCheckInterval)
 	checkTimer := time.NewTimer(checkIntv)
 
-	go func() {
-		for {
-			select {
-			case <-refreshTimer.C:
-				proxy.fetchBlockTemplate()
-				refreshTimer.Reset(refreshIntv)
+	switch cfg.UpstreamProto {
+	case "eth-proxy":
+		// use channel to comm
+		log.Printf("eth-proxy Upstream")
+
+	case "http":
+		proxy.upstreams = make([]*httprpc.RPCClient, len(cfg.Upstream))
+		for i, v := range cfg.Upstream {
+			client, err := httprpc.NewRPCClient(v.Name, v.Url, v.Timeout, v.Pool)
+			if err != nil {
+				log.Fatal(err)
+			} else {
+				proxy.upstreams[i] = client
+				log.Printf("http Upstream: %s => %s", v.Name, v.Url)
 			}
 		}
-	}()
+		log.Printf("Default upstream: %s => %s", proxy.rpc().Name, proxy.rpc().Url)
+		proxy.fetchBlockTemplate(nil)
+
+		go func() {
+			for {
+				select {
+				case <-refreshTimer.C:
+					proxy.fetchBlockTemplate(nil)
+					refreshTimer.Reset(refreshIntv)
+				}
+			}
+		}()
+	}
 
 	go func() {
 		for {
@@ -101,7 +141,7 @@ func NewEndpoint(cfg *Config) *ProxyServer {
 	return proxy
 }
 
-func (s *ProxyServer) rpc() *rpc.RPCClient {
+func (s *ProxyServer) rpc() *httprpc.RPCClient {
 	i := atomic.LoadInt32(&s.upstream)
 	return s.upstreams[i]
 }
@@ -183,7 +223,7 @@ func (cs *Session) handleMessage(s *ProxyServer, r *http.Request, req *JSONRpcRe
 		cs.sendResult(req.Id, &reply)
 	case "eth_submitWork":
 		var params []string
-		err := json.Unmarshal(*req.Params, &params)
+		err := json.Unmarshal(req.Params, &params)
 		if err != nil {
 			log.Println("Unable to parse params")
 			break
@@ -201,17 +241,17 @@ func (cs *Session) handleMessage(s *ProxyServer, r *http.Request, req *JSONRpcRe
 		}
 		cs.sendResult(req.Id, reply)
 	default:
-		errReply := s.handleUnknownRPC(cs, req)
+		errReply := s.handleUnknownRPC(cs, req.Method)
 		cs.sendError(req.Id, errReply)
 	}
 }
 
-func (cs *Session) sendResult(id *json.RawMessage, result interface{}) error {
+func (cs *Session) sendResult(id json.RawMessage, result interface{}) error {
 	message := JSONRpcResp{Id: id, Version: "2.0", Error: nil, Result: result}
 	return cs.enc.Encode(&message)
 }
 
-func (cs *Session) sendError(id *json.RawMessage, reply *ErrorReply) error {
+func (cs *Session) sendError(id json.RawMessage, reply *ErrorReply) error {
 	message := JSONRpcResp{Id: id, Version: "2.0", Error: reply}
 	return cs.enc.Encode(&message)
 }
@@ -222,9 +262,30 @@ func (s *ProxyServer) writeError(w http.ResponseWriter, status int, msg string) 
 }
 
 func (s *ProxyServer) currentBlockTemplate() *BlockTemplate {
-	return s.blockTemplate.Load().(*BlockTemplate)
+	t := s.blockTemplate.Load()
+	if t != nil {
+		return t.(*BlockTemplate)
+	} else {
+		return nil
+	}
 }
 
 func (s *ProxyServer) registerMiner(miner *Miner) {
 	s.miners.Set(miner.Id, miner)
+}
+
+func (s *ProxyServer) markSick() {
+	atomic.AddInt64(&s.failsCount, 1)
+}
+
+func (s *ProxyServer) isSick() bool {
+	x := atomic.LoadInt64(&s.failsCount)
+	if s.config.Proxy.HealthCheck && x >= s.config.Proxy.MaxFails {
+		return true
+	}
+	return false
+}
+
+func (s *ProxyServer) markOk() {
+	atomic.StoreInt64(&s.failsCount, 0)
 }

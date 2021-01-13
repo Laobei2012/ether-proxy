@@ -1,11 +1,13 @@
 package proxy
 
 import (
-	"../util"
 	"log"
 	"math/big"
 	"strconv"
 	"strings"
+
+	"../httprpc"
+	"../util"
 
 	"github.com/ethereum/go-ethereum/common"
 )
@@ -13,17 +15,20 @@ import (
 const maxBacklog = 8
 
 type heightDiffPair struct {
-	diff   *big.Int
-	height uint64
+	doubleDiff *big.Float
+	diff       *big.Int
+	height     uint64
 }
 
 type BlockTemplate struct {
-	Header     string
-	Seed       string
-	Target     string
-	Difficulty *big.Int
-	Height     uint64
-	headers    map[string]heightDiffPair
+	Header               string
+	Seed                 string
+	Target               string
+	Difficulty           *big.Int
+	Height               uint64
+	GetPendingBlockCache *httprpc.GetBlockReplyPart
+	nonces               map[string]bool
+	headers              map[string]heightDiffPair
 }
 
 type Block struct {
@@ -40,22 +45,41 @@ func (b Block) Nonce() uint64            { return b.nonce }
 func (b Block) MixDigest() common.Hash   { return b.mixDigest }
 func (b Block) NumberU64() uint64        { return b.number }
 
-func (s *ProxyServer) fetchBlockTemplate() {
-	rpc := s.rpc()
-	reply, err := rpc.GetWork()
-	if err != nil {
-		log.Printf("Error while refreshing block template on %s: %s", rpc.Name, err)
-		return
+func (s *ProxyServer) fetchBlockTemplate(reply []string) {
+	var (
+		err error
+		rpc *httprpc.RPCClient
+	)
+	switch s.config.UpstreamProto {
+	case "http":
+		rpc = s.rpc()
+		reply, err = rpc.GetWork()
+		if err != nil {
+			log.Printf("Error while refreshing block template on %s: %s", rpc.Name, err)
+			return
+		}
+	default:
+		// stratum no need to getwork
+		if reply == nil {
+			log.Panic("reply should not be nil for proto: " + s.config.UpstreamProto)
+			return
+		}
 	}
+
 	t := s.currentBlockTemplate()
 	// No need to update, we have fresh job
 	if t != nil && t.Header == reply[0] {
 		return
 	}
-	height, diff, err := s.fetchPendingBlock()
-	if err != nil {
-		log.Printf("Error while refreshing pending block on %s: %s", rpc.Name, err)
-		return
+
+	height, diff, err := s.SeedHashs[common.HexToHash(reply[1])]*30000, big.NewInt(0), nil
+	switch s.config.UpstreamProto {
+	case "http":
+		height, diff, err = s.fetchPendingBlock()
+		if err != nil {
+			log.Printf("Error while refreshing pending block on %s: %s", rpc.Name, err)
+			return
+		}
 	}
 
 	newTemplate := BlockTemplate{
@@ -67,7 +91,13 @@ func (s *ProxyServer) fetchBlockTemplate() {
 		headers:    make(map[string]heightDiffPair),
 	}
 	// Copy headers backlog and add current one
-	newTemplate.headers[reply[0]] = heightDiffPair{diff: util.TargetHexToDiff(reply[2]), height: height}
+	newTemplate.headers[reply[0]] = heightDiffPair{
+		doubleDiff: util.TargetHexToDoubleDiff(reply[2]),
+		diff:       util.TargetHexToDiff(reply[2]),
+		height:     height}
+	// log.Printf("newTemplate.headers %v %f %d", newTemplate.headers, newTemplate.headers[reply[0]].doubleDiff, newTemplate.headers[reply[0]].doubleDiff)
+	// log.Printf("t.headers %v", t.headers)
+
 	if t != nil {
 		for k, v := range t.headers {
 			if v.height > height-maxBacklog {
@@ -76,7 +106,15 @@ func (s *ProxyServer) fetchBlockTemplate() {
 		}
 	}
 	s.blockTemplate.Store(&newTemplate)
-	log.Printf("New block to mine on %s at height %d / %s", rpc.Name, height, reply[0][0:10])
+	jobID := reply[0][0:10]
+	s.Jobs.Add(util.Element{Key: jobID, Value: reply[0]})
+	// log.Printf("newTemplate.headers %v ", newTemplate.headers)
+	log.Printf("New block to mine at height %d / %s", height, jobID)
+
+	// Stratum
+	if s.config.Proxy.Stratum.Enabled {
+		go s.broadcastNewJobs()
+	}
 }
 
 func (s *ProxyServer) fetchPendingBlock() (uint64, *big.Int, error) {
