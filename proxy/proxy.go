@@ -45,6 +45,7 @@ type ProxyServer struct {
 	UpstreamTCP *rpc.Client
 	Hasher      *ethash.Ethash
 	SeedHashs   map[common.Hash]uint64
+	ExtraNonces [ExtraNonceSize]int8
 }
 
 type Session struct {
@@ -59,11 +60,14 @@ type Session struct {
 }
 
 const (
-	MaxReqSize = 1 * 1024
+	MaxReqSize     = 1 * 1024
+	ExtraNonceSize = 65536
 )
 
 func NewEndpoint(cfg *Config) *ProxyServer {
-	proxy := &ProxyServer{config: cfg, blockStats: make(map[int64]float64), SeedHashs: make(map[common.Hash]uint64)}
+	proxy := &ProxyServer{
+		config: cfg, blockStats: make(map[int64]float64), SeedHashs: make(map[common.Hash]uint64),
+	}
 	proxy.Jobs.Init(100)
 	proxy.Hasher = ethash.New()
 	proxy.miners = NewMinersMap()

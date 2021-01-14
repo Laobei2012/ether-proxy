@@ -1,7 +1,9 @@
 package proxy
 
 import (
+	"fmt"
 	"log"
+	"math/rand"
 	"regexp"
 	"strconv"
 	"strings"
@@ -206,11 +208,22 @@ func (s *ProxyServer) handleTCPSubscribeRPC(cs *Session, params []string, id str
 	clientVersion := params[0]
 	stratumVersion := params[1]
 
-	extraNonce := "dc39"
+	var n int64
+	for {
+		min := int64(0)
+		max := int64(ExtraNonceSize)
+		n = rand.Int63n(max - min)
+		if s.ExtraNonces[n] == 0 {
+			break
+		}
+	}
+	// todo: s.ExtraNonces need to clear when session close
+	s.ExtraNonces[n] = 1
+	extraNonce := fmt.Sprintf("%04x", n)
 	cs.exNonce = extraNonce
 	resultArray := []string{"mining.notify", extraNonce, stratumVersion}
 	result := []interface{}{resultArray, extraNonce}
 
-	log.Printf("Stratum miner subscribe %v %v @%v", clientVersion, stratumVersion, cs.ip)
+	log.Printf("Stratum miner subscribe %v %v %v @%v", clientVersion, stratumVersion, cs.ip, extraNonce)
 	return result, nil
 }
