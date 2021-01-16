@@ -109,7 +109,7 @@ func (s *ProxyServer) fetchBlockTemplate(reply []string) {
 	jobID := reply[0][0:10]
 	s.Jobs.Add(util.Element{Key: jobID, Value: reply[0]})
 	// log.Printf("newTemplate.headers %v ", newTemplate.headers)
-	log.Printf("New block to mine at height %d / %s", height, jobID)
+	// log.Printf("New block to mine at height %d / %s", height, jobID)
 
 	// Stratum
 	if s.config.Proxy.Stratum.Enabled {

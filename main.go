@@ -210,6 +210,13 @@ func main() {
 
 	// log.Printf("seedhash, %v ", x)
 
+	f, err := os.OpenFile(time.Now().Format("2006-01-02")+".log", os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer f.Close()
+	log.SetOutput(f)
+
 	readConfig(&cfg)
 	// startNewrelic()
 	s := startProxy()

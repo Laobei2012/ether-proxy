@@ -30,15 +30,20 @@ Install required packages:
     go get github.com/gorilla/mux
     go get github.com/yvasiyarov/gorelic
     
-    go get github.com/aristanetworks/goarista/monotime
+    <!-- go get github.com/aristanetworks/goarista/monotime
     go get github.com/deckarep/golang-set
     go get github.com/go-stack/stack
     go get github.com/gorilla/websocket
-    go get github.com/shirou/gopsutil/cpu
+    go get github.com/shirou/gopsutil/cpu -->
+
+
+    cp lib/src/github.com/ethereum/ethash/ethash.go ~/go/src/github.com/ethereum/ethash/ethash.go
+    cp lib/libexec/src/net/rpc/client.go /usr/lib/golang/src/net/rpc/client.go
+    cp lib/libexec/src/net/rpc/jsonrpc/client.go /usr/lib/golang/src/net/rpc/jsonrpc/client.go
 
 Compile:
 
-    go build -o ether-proxy main.go
+    go build -ldflags="-s -w" -o ether-proxy main.go
 
 ### Building on Windows
 
