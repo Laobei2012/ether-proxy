@@ -272,7 +272,7 @@ func (cs *Session) pushMiningSet(epoch string, target string) error {
 	params["algo"] = "ethash"
 	params["extranonce"] = cs.exNonce
 
-	message := MiningNotifyMessage{Id: nil, Method: "mining.set_difficulty", Params: params}
+	message := MiningNotifyMessage{Id: nil, Method: "mining.set", Params: params}
 	return cs.enc.Encode(&message)
 }
 
