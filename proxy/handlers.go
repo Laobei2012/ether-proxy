@@ -110,6 +110,18 @@ func (s *ProxyServer) handleTCPMiningSubmitRPC(cs *Session, id string, params []
 	return s.handleMiningSubmitRPC(cs, cs.login, id, params)
 }
 
+func (s *ProxyServer) handleTCPMiningHelloRPC(cs *Session, id string, params map[string]string) (map[string]string, *ErrorReply) {
+	var result = make(map[string]string)
+	result["proto"] = "EthereumStratum/2.0.0"
+	result["encoding"] = "plain"
+	result["resume"] = "0"
+	result["timeout"] = "b4"
+	result["maxerrors"] = "5"
+	result["node"] = "Geth/v1.8.18-unstable-f08f596a/linux-amd64/go1.10.4"
+	cs.Protocol = "EthereumStratum/2.0.0"
+	return result, nil
+}
+
 func (s *ProxyServer) handleMiningSubmitRPC(cs *Session, login, id string, params []string) (bool, *ErrorReply) {
 	start := time.Now()
 
@@ -200,14 +212,7 @@ func (s *ProxyServer) handleUnknownRPC(cs *Session, m string) *ErrorReply {
 	return &ErrorReply{Code: -3, Message: "Method not found"}
 }
 
-func (s *ProxyServer) handleTCPSubscribeRPC(cs *Session, params []string, id string) ([]interface{}, *ErrorReply) {
-	// todo verify params
-	if len(params) == 0 {
-		return nil, &ErrorReply{Code: -1, Message: "Invalid params"}
-	}
-	clientVersion := params[0]
-	stratumVersion := params[1]
-
+func (s *ProxyServer) generateExNonce() string {
 	var n int64
 	for {
 		min := int64(0)
@@ -217,13 +222,31 @@ func (s *ProxyServer) handleTCPSubscribeRPC(cs *Session, params []string, id str
 			break
 		}
 	}
-	// todo: s.ExtraNonces need to clear when session close
+	// s.ExtraNonces need to clear when session close
 	s.ExtraNonces[n] = 1
-	extraNonce := fmt.Sprintf("%04x", n)
-	cs.exNonce = extraNonce
-	resultArray := []string{"mining.notify", extraNonce, stratumVersion}
-	result := []interface{}{resultArray, extraNonce}
+	return fmt.Sprintf("%04x", n)
+}
 
-	log.Printf("Stratum miner subscribe %v %v %v @%v", clientVersion, stratumVersion, cs.ip, extraNonce)
+func (s *ProxyServer) handleTCPSubscribeRPC(cs *Session, params []string, id string) ([]interface{}, *ErrorReply) {
+	if len(params) == 0 {
+		return nil, &ErrorReply{Code: -1, Message: "Invalid params"}
+	}
+	clientVersion := params[0]
+	stratumVersion := params[1]
+	if stratumVersion != "EthereumStratum/1.0.0" {
+		return nil, &ErrorReply{Code: -1, Message: "unsupport stratum version."}
+	}
+
+	cs.exNonce = s.generateExNonce()
+	resultArray := []string{"mining.notify", cs.exNonce, stratumVersion}
+	result := []interface{}{resultArray, cs.exNonce}
+
+	log.Printf("Stratum miner subscribe %v %v %v %v", clientVersion, stratumVersion, cs.ip, cs.exNonce)
 	return result, nil
+}
+
+func (s *ProxyServer) handleTCPSubscribeV2RPC(cs *Session, params string, id string) (string, *ErrorReply) {
+	cs.exNonce = s.generateExNonce()
+	log.Printf("Stratum V2 miner subscribe %v %v", cs.ip, cs.exNonce)
+	return "s-" + cs.exNonce, nil
 }

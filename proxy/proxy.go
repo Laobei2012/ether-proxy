@@ -41,7 +41,7 @@ type ProxyServer struct {
 	sessionsMu sync.RWMutex
 	sessions   map[*Session]struct{}
 
-	Jobs        util.Cache_fifo
+	Jobs        util.Cache_fifo // save jobs hash for calculate mixDigest
 	UpstreamTCP *rpc.Client
 	Hasher      *ethash.Ethash
 	SeedHashs   map[common.Hash]uint64
@@ -57,6 +57,8 @@ type Session struct {
 	conn    *net.TCPConn
 	login   string
 	exNonce string
+
+	Protocol string
 }
 
 const (
@@ -72,6 +74,7 @@ func NewEndpoint(cfg *Config) *ProxyServer {
 	proxy.Hasher = ethash.New()
 	proxy.miners = NewMinersMap()
 
+	// todo expend seed hash length
 	for i := uint64(385); i <= 400; i++ {
 		seedhash := proxy.Hasher.MakeSeedHash(i)
 		proxy.SeedHashs[seedhash] = i

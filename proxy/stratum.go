@@ -4,9 +4,11 @@ import (
 	"bufio"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"net"
+	"strconv"
 	"time"
 
 	"../util"
@@ -113,7 +115,7 @@ func (cs *Session) handleTCPMessage(s *ProxyServer, req *StratumReq) error {
 		var params []string
 		err := json.Unmarshal(req.Params, &params)
 		if err != nil {
-			log.Println("Malformed stratum request params from", cs.ip)
+			log.Printf("eth_submitLogin Malformed stratum request params from %s, %v", cs.ip, req.Params)
 			return err
 		}
 		reply, errReply := s.handleLoginRPC(cs, params, req.Worker)
@@ -131,7 +133,7 @@ func (cs *Session) handleTCPMessage(s *ProxyServer, req *StratumReq) error {
 		var params []string
 		err := json.Unmarshal(req.Params, &params)
 		if err != nil {
-			log.Println("Malformed stratum request params from", cs.ip)
+			log.Printf("eth_submitWork Malformed stratum request params from %s, %v", cs.ip, req.Params)
 			return err
 		}
 		reply, errReply := s.handleETHSubmitWorkRPC(cs, req.Worker, params)
@@ -143,54 +145,95 @@ func (cs *Session) handleTCPMessage(s *ProxyServer, req *StratumReq) error {
 		return cs.sendTCPResult(req.Id, true)
 
 	case "mining.subscribe":
-		var params []string
-		err := json.Unmarshal(req.Params, &params)
-		if err != nil {
-			log.Println("Malformed stratum request params from", cs.ip)
-			return err
+		var errReply *ErrorReply
+		var reply interface{}
+
+		switch cs.Protocol {
+		case "EthereumStratum/2.0.0":
+			var params = ""
+			if len(req.Params) > 0 {
+				err := json.Unmarshal(req.Params, &params)
+				if err != nil {
+					log.Printf("mining.subscribe Malformed stratum request params from %s, %v", cs.ip, req.Params)
+					return err
+				}
+			}
+			reply, errReply = s.handleTCPSubscribeV2RPC(cs, params, req.Worker)
+		default:
+			var params []string
+			err := json.Unmarshal(req.Params, &params)
+			if err != nil {
+				log.Printf("mining.subscribe Malformed stratum request params from %s, %v", cs.ip, req.Params)
+				return err
+			}
+			reply, errReply = s.handleTCPSubscribeRPC(cs, params, req.Worker)
 		}
-		reply, errReply := s.handleTCPSubscribeRPC(cs, params, req.Worker)
+
 		if errReply != nil {
 			return cs.sendTCPError(req.Id, errReply)
 		}
 		return cs.sendTCPResult(req.Id, reply)
+
 	case "mining.extranonce.subscribe":
 		return nil
 	case "mining.authorize":
 		var params []string
 		err := json.Unmarshal(req.Params, &params)
 		if err != nil {
-			log.Println("Malformed stratum request params from", cs.ip)
+			log.Printf("mining.authorize Malformed stratum request params from %s, %v", cs.ip, req.Params)
 			return err
 		}
 		reply, errReply := s.handleLoginRPC(cs, params, req.Worker)
 		if errReply != nil {
 			return cs.sendTCPError(req.Id, errReply)
 		}
-		cs.sendTCPResult(req.Id, reply)
 
-		// push first job
 		t := s.currentBlockTemplate()
 		if t == nil || len(t.Header) == 0 || s.isSick() {
-			log.Println("Current Block Template error")
+			log.Printf("Current Block Template error")
 			return errors.New("Current Block Template error")
 		}
 
-		// set difficulty
-		diff, _ := t.headers[t.Header].doubleDiff.Float64()
-		cs.pushSetDifficulty(diff)
+		switch cs.Protocol {
+		case "EthereumStratum/2.0.0":
+			cs.sendTCPResult(req.Id, "w-"+cs.exNonce)
+			cs.pushMiningSet(fmt.Sprintf("%x", t.Height/30000), t.Target)
+			// jobId, block id, headerhash, "0"
+			currentJob := []interface{}{t.Header[2:10], fmt.Sprintf("%x", t.Height), t.Header, "0"}
+			return cs.pushNewJob(currentJob)
 
-		currentJob := []interface{}{t.Header[2:10], t.Seed, t.Header, true}
-		return cs.pushNewJob(currentJob)
+		default:
+			cs.sendTCPResult(req.Id, reply)
+
+			// set difficulty
+			diff, _ := t.headers[t.Header].doubleDiff.Float64()
+			cs.pushSetDifficulty(diff)
+
+			currentJob := []interface{}{t.Header[2:10], t.Seed, t.Header, true}
+			return cs.pushNewJob(currentJob)
+		}
 
 	case "mining.submit":
 		var params []string
 		err := json.Unmarshal(req.Params, &params)
 		if err != nil {
-			log.Println("Malformed stratum request params from", cs.ip)
+			log.Println("mining.submit Malformed stratum request params from %s, %v", cs.ip, req.Params)
 			return err
 		}
 		reply, errReply := s.handleTCPMiningSubmitRPC(cs, req.Worker, params)
+		if errReply != nil {
+			return cs.sendTCPError(req.Id, errReply)
+		}
+		return cs.sendTCPResult(req.Id, &reply)
+
+	case "mining.hello":
+		var params map[string]string
+		err := json.Unmarshal(req.Params, &params)
+		if err != nil {
+			log.Printf("mining.hello Malformed stratum request params from %s, %v", cs.ip, params)
+			return err
+		}
+		reply, errReply := s.handleTCPMiningHelloRPC(cs, req.Worker, params)
 		if errReply != nil {
 			return cs.sendTCPError(req.Id, errReply)
 		}
@@ -216,6 +259,20 @@ func (cs *Session) pushSetDifficulty(diff float64) error {
 	defer cs.Unlock()
 
 	message := MiningNotifyMessage{Id: nil, Method: "mining.set_difficulty", Params: []float64{diff}}
+	return cs.enc.Encode(&message)
+}
+
+func (cs *Session) pushMiningSet(epoch string, target string) error {
+	cs.Lock()
+	defer cs.Unlock()
+
+	params := make(map[string]string)
+	params["epoch"] = epoch
+	params["target"] = target
+	params["algo"] = "ethash"
+	params["extranonce"] = cs.exNonce
+
+	message := MiningNotifyMessage{Id: nil, Method: "mining.set_difficulty", Params: params}
 	return cs.enc.Encode(&message)
 }
 
@@ -253,6 +310,10 @@ func (s *ProxyServer) registerSession(cs *Session) {
 func (s *ProxyServer) removeSession(cs *Session) {
 	s.sessionsMu.Lock()
 	defer s.sessionsMu.Unlock()
+	// release extra nonce
+	n, _ := strconv.Atoi(cs.exNonce)
+	s.ExtraNonces[n] = 0
+	log.Printf("remove session %v, %v@%v", cs.exNonce, cs.login, cs.ip)
 	delete(s.sessions, cs)
 }
 

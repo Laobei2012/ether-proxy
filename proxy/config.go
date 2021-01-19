@@ -1,11 +1,12 @@
 package proxy
 
 type Config struct {
-	Proxy                 Proxy      `json:"proxy"`
-	Frontend              Frontend   `json:"frontend"`
-	Upstream              []Upstream `json:"upstream"`
-	UpstreamCheckInterval string     `json:"upstreamCheckInterval"`
-	UpstreamProto         string     `json:"upstreamProto"`
+	Proxy                     Proxy      `json:"proxy"`
+	Frontend                  Frontend   `json:"frontend"`
+	Upstream                  []Upstream `json:"upstream"`
+	UpstreamCheckInterval     string     `json:"upstreamCheckInterval"`
+	UpstreamProto             string     `json:"upstreamProto"`
+	UpstreamMaxNotifyInterval string     `json:"upstreamMaxNotifyInterval"`
 
 	Threads int `json:"threads"`
 

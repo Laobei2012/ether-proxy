@@ -110,6 +110,8 @@ var ctx = context.Background()
 
 func startPool(server *proxy.ProxyServer) {
 	pool := cfg.Upstream[0]
+	maxNotifyInterval, _ := time.ParseDuration(cfg.UpstreamMaxNotifyInterval)
+
 	endChan := make(chan int, 1)
 
 	for {
@@ -156,14 +158,14 @@ func startPool(server *proxy.ProxyServer) {
 		if err != nil {
 			log.Fatal("rpc call error: ", err)
 		}
-		log.Printf("return: %v", replyBool)
+		log.Printf("login with: %v", pool.User)
 
 		var replyArray []interface{}
 		err = clientRPC.Call("eth_getWork", []string{""}, &replyArray)
 		if err != nil {
 			log.Fatal("rpc call error: ", err)
 		}
-		log.Printf("return: %v", replyArray)
+		log.Printf("getwork return: %v", replyArray)
 		/*/
 		var clientInfo = [...]string{"ethminer-0.19.0", "EthereumStratum/1.0.0"}
 		var subscribeReply []interface{}
@@ -189,8 +191,7 @@ func startPool(server *proxy.ProxyServer) {
 				case rep := <-clientRPC.PushChan:
 					server.OnPoolNotify(rep)
 					// log.Println("recv: ", rep)
-				case <-time.After(300 * time.Second):
-					// todo : move time out to config file
+				case <-time.After(maxNotifyInterval):
 					log.Println("recv timeout")
 					endChan <- 1
 					return
