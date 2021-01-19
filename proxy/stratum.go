@@ -199,7 +199,8 @@ func (cs *Session) handleTCPMessage(s *ProxyServer, req *StratumReq) error {
 			cs.sendTCPResult(req.Id, "w-"+cs.exNonce)
 			cs.pushMiningSet(fmt.Sprintf("%x", t.Height/30000), t.Target)
 			// jobId, block id, headerhash, "0"
-			currentJob := []interface{}{t.Header[2:10], fmt.Sprintf("%x", t.Height), t.Header, "0"}
+			currentJob := []interface{}{t.Header[2:10], fmt.Sprintf("%x", t.Height),
+				t.Header[2:], "0"}
 			return cs.pushNewJob(currentJob)
 
 		default:
@@ -268,7 +269,7 @@ func (cs *Session) pushMiningSet(epoch string, target string) error {
 
 	params := make(map[string]string)
 	params["epoch"] = epoch
-	params["target"] = target
+	params["target"] = target[2:]
 	params["algo"] = "ethash"
 	params["extranonce"] = cs.exNonce
 
@@ -344,6 +345,8 @@ func (s *ProxyServer) broadcastNewJobs() {
 	// }\n
 
 	reply := []interface{}{t.Header[2:10], t.Seed, t.Header, true}
+	replyV2 := []interface{}{t.Header[2:10], fmt.Sprintf("%x", t.Height),
+		t.Header[2:], "0"}
 
 	s.sessionsMu.RLock()
 	defer s.sessionsMu.RUnlock()
@@ -360,7 +363,14 @@ func (s *ProxyServer) broadcastNewJobs() {
 		bcast <- n
 
 		go func(cs *Session) {
-			err := cs.pushNewJob(&reply)
+			var err error
+			// todo change Protocol string to number
+			switch cs.Protocol {
+			case "EthereumStratum/2.0.0":
+				err = cs.pushNewJob(&replyV2)
+			default:
+				err = cs.pushNewJob(&reply)
+			}
 			<-bcast
 			if err != nil {
 				log.Printf("Job transmit error to %v@%v: %v", cs.login, cs.ip, err)
