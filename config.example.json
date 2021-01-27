@@ -10,7 +10,7 @@
 		"largeLuckWindow": "72h",
 		"stratum": {
 			"enabled": true,
-			"listen": "0.0.0.0:8008",
+			"listen": "0.0.0.0:6688",
 			"timeout": "120s",
 			"maxConn": 8192
 		}
@@ -22,6 +22,7 @@
 	},
 	"upstreamCheckInterval": "5s",
 	"upstreamProto": "eth-proxy",
+	"upstreamMaxNotifyInterval": "1200s",
 	"upstream": [
 		{
 			"pool": true,
@@ -29,9 +30,5 @@
 			"url": "//sp_miner2020.1234@cn.sparkpool.com:13333",
 			"timeout": "10s"
 		}
-	],
-	"newrelicEnabled": false,
-	"newrelicName": "MyEtherProxy",
-	"newrelicKey": "SECRET_KEY",
-	"newrelicVerbose": false
+	]
 }

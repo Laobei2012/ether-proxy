@@ -38,8 +38,11 @@ Install required packages:
 
 
     cp lib/src/github.com/ethereum/ethash/ethash.go ~/go/src/github.com/ethereum/ethash/ethash.go
-    cp lib/libexec/src/net/rpc/client.go /usr/lib/golang/src/net/rpc/client.go
-    cp lib/libexec/src/net/rpc/jsonrpc/client.go /usr/lib/golang/src/net/rpc/jsonrpc/client.go
+    #cp lib/libexec/src/net/rpc/client.go /usr/lib/golang/src/net/rpc/client.go
+    #cp lib/libexec/src/net/rpc/jsonrpc/client.go /usr/lib/golang/src/net/rpc/jsonrpc/client.go
+
+    sudo cp lib/libexec/src/net/rpc/client.go  /usr/share/go-1.13/src/net/rpc/client.go
+    sudo cp lib/libexec/src/net/rpc/jsonrpc/client.go /usr/share/go-1.13/src/net/rpc/jsonrpc/client.go
 
 Compile:
 

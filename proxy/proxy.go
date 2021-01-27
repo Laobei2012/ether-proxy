@@ -59,7 +59,23 @@ type Session struct {
 	exNonce string
 
 	Protocol string
+	HashRate int64
 }
+
+type RuningStat struct {
+	TotalBroadcasts      int64
+	TotalBroadcastTime   int64
+	TotalShares          int64
+	TotalShareSubmitTime int64
+	TotalJobs            int64
+}
+
+var (
+	GRStat       RuningStat
+	GRStatByMin  util.Cache_fifo
+	GRStatByHour util.Cache_fifo
+	GRStatByDay  util.Cache_fifo
+)
 
 const (
 	MaxReqSize     = 1 * 1024
@@ -67,6 +83,10 @@ const (
 )
 
 func NewEndpoint(cfg *Config) *ProxyServer {
+	GRStatByMin.Init(100)
+	GRStatByHour.Init(100)
+	GRStatByDay.Init(100)
+
 	proxy := &ProxyServer{
 		config: cfg, blockStats: make(map[int64]float64), SeedHashs: make(map[common.Hash]uint64),
 	}
@@ -105,6 +125,8 @@ func NewEndpoint(cfg *Config) *ProxyServer {
 	checkIntv, _ := time.ParseDuration(cfg.UpstreamCheckInterval)
 	checkTimer := time.NewTimer(checkIntv)
 
+	runingTimerMin := time.NewTimer(time.Minute)
+
 	switch cfg.UpstreamProto {
 	case "eth-proxy":
 		// use channel to comm
@@ -141,6 +163,45 @@ func NewEndpoint(cfg *Config) *ProxyServer {
 			case <-checkTimer.C:
 				proxy.checkUpstreams()
 				checkTimer.Reset(checkIntv)
+			case <-runingTimerMin.C:
+				currentMin := time.Now().Unix() / 60
+				lastStatI, err := GRStatByMin.Get(currentMin - 1)
+				avgCast, avgSubmit, totalAvgCast, totalAvgSubmit := int64(0), int64(0), int64(0), int64(0)
+				if GRStat.TotalBroadcasts > 0 {
+					totalAvgCast = GRStat.TotalBroadcastTime / GRStat.TotalBroadcasts
+				}
+				if GRStat.TotalShares > 0 {
+					totalAvgSubmit = GRStat.TotalShareSubmitTime / GRStat.TotalShares / 1000
+				}
+
+				if err == nil {
+					lastStat := lastStatI.(RuningStat)
+					if GRStat.TotalBroadcasts-lastStat.TotalBroadcasts > 0 {
+						avgCast = (GRStat.TotalBroadcastTime - lastStat.TotalBroadcastTime) /
+							(GRStat.TotalBroadcasts - lastStat.TotalBroadcasts)
+					}
+					if GRStat.TotalShares-lastStat.TotalShares > 0 {
+						avgSubmit = (GRStat.TotalShareSubmitTime - lastStat.TotalShareSubmitTime) /
+							(GRStat.TotalShares - lastStat.TotalShares) / 1000
+					}
+					log.Printf("Runing info: clients:%v, cast:%v, avgCast(us):%v(%v), jobs:%v(%v), shares:%v(%v), avgSubmit(ms):%v(%v)",
+						len(proxy.sessions),
+						GRStat.TotalBroadcasts-lastStat.TotalBroadcasts,
+						avgCast, totalAvgCast,
+						GRStat.TotalJobs-lastStat.TotalJobs, GRStat.TotalJobs,
+						GRStat.TotalShares-lastStat.TotalShares, GRStat.TotalShares,
+						avgSubmit, totalAvgSubmit,
+					)
+				} else {
+					log.Printf("Runing info: clients:%v, cast:%v, avgCast(us):%v, jobs:%v, shares:%v, avgSubmit(ms):%v",
+						len(proxy.sessions), GRStat.TotalBroadcasts,
+						totalAvgCast,
+						GRStat.TotalJobs,
+						GRStat.TotalShares, totalAvgSubmit,
+					)
+				}
+				GRStatByMin.Add(currentMin, GRStat)
+				runingTimerMin.Reset(time.Minute)
 			}
 		}
 	}()

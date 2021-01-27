@@ -75,7 +75,7 @@ func (s *ProxyServer) handleLoginRPC(cs *Session, params []string, id string) (b
 	// }
 	cs.login = login
 	s.registerSession(cs)
-	log.Printf("Stratum miner connected %v@%v", login, cs.ip)
+	log.Printf("Stratum miner login %v@%v", login, cs.ip)
 	return true, nil
 }
 
@@ -108,6 +108,28 @@ func (s *ProxyServer) handleTCPMiningSubmitRPC(cs *Session, id string, params []
 		return false, &ErrorReply{Code: 25, Message: "Not subscribed"}
 	}
 	return s.handleMiningSubmitRPC(cs, cs.login, id, params)
+}
+
+func (s *ProxyServer) handleTCPMiningHashrateRPC(cs *Session, id string, params []string) (bool, *ErrorReply) {
+	s.sessionsMu.RLock()
+	_, ok := s.sessions[cs]
+	s.sessionsMu.RUnlock()
+
+	if !ok {
+		return false, &ErrorReply{Code: 25, Message: "Not subscribed"}
+	}
+
+	var replyBool bool
+	t := s.currentBlockTemplate()
+	// todo: second param should be a rand string
+	rate := []string{params[0], t.Header}
+	err := s.UpstreamTCP.Call("eth_submitHashrate", rate, &replyBool)
+	if err != nil {
+		log.Fatal("rpc call error: ", err)
+	}
+	log.Printf("submit Hashrate: %v, return: %v", rate, replyBool)
+
+	return replyBool, nil
 }
 
 func (s *ProxyServer) handleTCPMiningHelloRPC(cs *Session, id string, params map[string]string) (map[string]string, *ErrorReply) {
@@ -165,7 +187,8 @@ func (s *ProxyServer) handleMiningSubmitRPC(cs *Session, login, id string, param
 	// mining.submit : [username, job ID, minernonce]
 	// compose eth_submitwork message and send to pool
 	nonce := "0x" + cs.exNonce + params[2]
-	hash, _ := s.Jobs.Get("0x" + params[1])
+	hashI, _ := s.Jobs.Get("0x" + params[1])
+	hash := hashI.(string)
 	var mixDigest *common.Hash
 
 	t := s.currentBlockTemplate()
@@ -193,6 +216,8 @@ func (s *ProxyServer) handleMiningSubmitRPC(cs *Session, login, id string, param
 		log.Fatal("rpc call error: ", err)
 	}
 	log.Printf("submit work: %v, return: %v, time: %s", work, replyBool, time.Since(start))
+	GRStat.TotalShares++
+	GRStat.TotalShareSubmitTime += time.Since(start).Microseconds()
 
 	return replyBool, nil
 }

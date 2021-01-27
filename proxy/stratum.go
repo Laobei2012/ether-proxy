@@ -44,7 +44,7 @@ func (s *ProxyServer) ListenTCP() {
 		conn.SetKeepAlive(true)
 
 		ip, _, _ := net.SplitHostPort(conn.RemoteAddr().String())
-		log.Printf("AcceptTCP: %v", ip)
+		// log.Printf("AcceptTCP: %v", ip)
 
 		// if s.policy.IsBanned(ip) || !s.policy.ApplyLimitPolicy(ip) {
 		// 	conn.Close()
@@ -239,6 +239,20 @@ func (cs *Session) handleTCPMessage(s *ProxyServer, req *StratumReq) error {
 			return cs.sendTCPError(req.Id, errReply)
 		}
 		return cs.sendTCPResult(req.Id, &reply)
+	case "mining.noop":
+		return cs.sendTCPResult(req.Id, true)
+	case "mining.hashrate":
+		var params []string
+		err := json.Unmarshal(req.Params, &params)
+		if err != nil {
+			log.Println("mining.hashrate Malformed stratum request params from %s, %v", cs.ip, req.Params)
+			return err
+		}
+		_, errReply := s.handleTCPMiningHashrateRPC(cs, req.Worker, params)
+		if errReply != nil {
+			return cs.sendTCPError(req.Id, errReply)
+		}
+		return cs.sendTCPResult(req.Id, true)
 
 	default:
 		errReply := s.handleUnknownRPC(cs, req.Method)
@@ -351,10 +365,10 @@ func (s *ProxyServer) broadcastNewJobs() {
 	s.sessionsMu.RLock()
 	defer s.sessionsMu.RUnlock()
 
-	// count := len(s.sessions)
+	count := len(s.sessions)
 	// log.Printf("Broadcasting new job to %v stratum miners", count)
 
-	// start := time.Now()
+	start := time.Now()
 	bcast := make(chan int, 1024)
 	n := 0
 
@@ -380,5 +394,11 @@ func (s *ProxyServer) broadcastNewJobs() {
 			}
 		}(m)
 	}
+	GRStat.TotalBroadcasts += int64(count)
+	GRStat.TotalJobs++
+	if count > 0 {
+		GRStat.TotalBroadcastTime += time.Since(start).Microseconds()
+	}
+
 	// log.Printf("Jobs broadcast to %v miners finished %s", count, time.Since(start))
 }
