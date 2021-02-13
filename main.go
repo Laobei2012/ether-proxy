@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"log"
 	"net"
 	"net/http"
@@ -211,12 +212,15 @@ func main() {
 
 	// log.Printf("seedhash, %v ", x)
 
+	// todo: print to console too...
 	f, err := os.OpenFile(time.Now().Format("2006-01-02")+".log", os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer f.Close()
-	log.SetOutput(f)
+	mw := io.MultiWriter(os.Stdout, f)
+	log.SetOutput(mw)
+	// log.SetOutput(f)
 
 	readConfig(&cfg)
 	// startNewrelic()
