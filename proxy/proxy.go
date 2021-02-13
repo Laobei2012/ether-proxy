@@ -58,7 +58,7 @@ type Session struct {
 	login   string
 	exNonce string
 
-	Protocol string
+	Protocol int8 // 0: eth-proxy, 1: stratum v1, 2: stratum v2
 	HashRate int64
 }
 
@@ -243,6 +243,7 @@ func (s *ProxyServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s.handleClient(w, r)
 }
 
+// handle http client
 func (s *ProxyServer) handleClient(w http.ResponseWriter, r *http.Request) error {
 	ip, _, _ := net.SplitHostPort(r.RemoteAddr)
 	cs := &Session{ip: ip, enc: json.NewEncoder(w)}

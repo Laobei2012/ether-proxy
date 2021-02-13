@@ -149,7 +149,7 @@ func (cs *Session) handleTCPMessage(s *ProxyServer, req *StratumReq) error {
 		var reply interface{}
 
 		switch cs.Protocol {
-		case "EthereumStratum/2.0.0":
+		case 2: // "EthereumStratum/2.0.0":
 			var params = ""
 			if len(req.Params) > 0 {
 				err := json.Unmarshal(req.Params, &params)
@@ -195,15 +195,14 @@ func (cs *Session) handleTCPMessage(s *ProxyServer, req *StratumReq) error {
 		}
 
 		switch cs.Protocol {
-		case "EthereumStratum/2.0.0":
+		case 2: // "EthereumStratum/2.0.0":
 			cs.sendTCPResult(req.Id, "w-"+cs.exNonce)
 			cs.pushMiningSet(fmt.Sprintf("%x", t.Height/30000), t.Target)
 			// jobId, block id, headerhash, "0"
 			currentJob := []interface{}{t.Header[2:10], fmt.Sprintf("%x", t.Height),
 				t.Header[2:], "0"}
-			return cs.pushNewJob(currentJob)
-
-		default:
+			return cs.pushNewJobV2(currentJob)
+		case 1:
 			cs.sendTCPResult(req.Id, reply)
 
 			// set difficulty
@@ -211,7 +210,11 @@ func (cs *Session) handleTCPMessage(s *ProxyServer, req *StratumReq) error {
 			cs.pushSetDifficulty(diff)
 
 			currentJob := []interface{}{t.Header[2:10], t.Seed, t.Header, true}
-			return cs.pushNewJob(currentJob)
+			return cs.pushNewJobV1(currentJob)
+		default:
+			str := fmt.Sprintf("unsupported mining.authorize message with protocol: %d", cs.Protocol)
+			log.Println(str)
+			return errors.New(str)
 		}
 
 	case "mining.submit":
@@ -291,12 +294,28 @@ func (cs *Session) pushMiningSet(epoch string, target string) error {
 	return cs.enc.Encode(&message)
 }
 
-func (cs *Session) pushNewJob(result interface{}) error {
+func (cs *Session) pushNewJobV2(result interface{}) error {
 	cs.Lock()
 	defer cs.Unlock()
 	// FIXME: Temporarily add ID for Claymore compliance
 	// message := JSONPushMessage{Version: "2.0", Result: result, Id: 0}
 	message := MiningNotifyMessage{Params: result, Id: nil, Error: nil, Method: "mining.notify"}
+	return cs.enc.Encode(&message)
+}
+
+func (cs *Session) pushNewJobV1(result interface{}) error {
+	cs.Lock()
+	defer cs.Unlock()
+	// FIXME: Temporarily add ID for Claymore compliance
+	message := MiningNotifyMessage{Params: result, Id: nil, Error: nil, Method: "mining.notify"}
+	return cs.enc.Encode(&message)
+}
+
+func (cs *Session) pushNewJob(result interface{}) error {
+	cs.Lock()
+	defer cs.Unlock()
+	// FIXME: Temporarily add ID for Claymore compliance
+	message := JSONPushMessage{Version: "2.0", Result: result, Id: 0}
 	return cs.enc.Encode(&message)
 }
 
@@ -345,6 +364,13 @@ func (s *ProxyServer) broadcastNewJobs() {
 	}
 	// reply := []string{t.Header, t.Seed, s.diff}
 
+	// eth-proxy
+	// Eth: Received: {"id":0,"jsonrpc":"2.0","result":[
+	// "0x92c27eb3ab118c0a3cef199f0c50fb8947b0ef7283954d2ad92c37c865bd2bc9",
+	// "0x543b6279479743f05c14c59a68fb51f82e8cd46e9dd674900b4d8d0322dddf3d",
+	// "0x0000000089705f4136b4a59731680a88f8953030fdd7645e011abac9f387295d"]}
+	// jobhash, seedhash, target
+
 	// https://github.com/nicehash/Specifications/blob/master/EthereumStratum_NiceHash_v1.0.0.txt
 	// stratum v1
 	// 	{
@@ -357,10 +383,6 @@ func (s *ProxyServer) broadcastNewJobs() {
 	//     true
 	//   ]
 	// }\n
-
-	reply := []interface{}{t.Header[2:10], t.Seed, t.Header, true}
-	replyV2 := []interface{}{t.Header[2:10], fmt.Sprintf("%x", t.Height),
-		t.Header[2:], "0"}
 
 	s.sessionsMu.RLock()
 	defer s.sessionsMu.RUnlock()
@@ -380,9 +402,15 @@ func (s *ProxyServer) broadcastNewJobs() {
 			var err error
 			// todo change Protocol string to number
 			switch cs.Protocol {
-			case "EthereumStratum/2.0.0":
-				err = cs.pushNewJob(&replyV2)
+			case 2:
+				replyV2 := []interface{}{t.Header[2:10], fmt.Sprintf("%x", t.Height),
+					t.Header[2:], "0"}
+				err = cs.pushNewJobV2(&replyV2)
+			case 1:
+				replyV1 := []interface{}{t.Header[2:10], t.Seed, t.Header, true}
+				err = cs.pushNewJobV1(&replyV1)
 			default:
+				reply := []interface{}{t.Header, t.Seed, t.Target}
 				err = cs.pushNewJob(&reply)
 			}
 			<-bcast

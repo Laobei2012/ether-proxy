@@ -84,7 +84,7 @@ func (s *ProxyServer) handleTCPGetWorkRPC(cs *Session) ([]string, *ErrorReply) {
 	if t == nil || len(t.Header) == 0 || s.isSick() {
 		return nil, &ErrorReply{Code: 0, Message: "Work not ready"}
 	}
-	return []string{t.Header, t.Seed, s.diff}, nil
+	return []string{t.Header, t.Seed, t.Target}, nil
 }
 
 // Stratum
@@ -140,7 +140,7 @@ func (s *ProxyServer) handleTCPMiningHelloRPC(cs *Session, id string, params map
 	result["timeout"] = "b4"
 	result["maxerrors"] = "5"
 	result["node"] = "Geth/v1.8.18-unstable-f08f596a/linux-amd64/go1.10.4"
-	cs.Protocol = "EthereumStratum/2.0.0"
+	cs.Protocol = 2 // "EthereumStratum/2.0.0"
 	return result, nil
 }
 
@@ -261,6 +261,7 @@ func (s *ProxyServer) handleTCPSubscribeRPC(cs *Session, params []string, id str
 	if stratumVersion != "EthereumStratum/1.0.0" {
 		return nil, &ErrorReply{Code: -1, Message: "unsupport stratum version."}
 	}
+	cs.Protocol = 1
 
 	cs.exNonce = s.generateExNonce()
 	resultArray := []string{"mining.notify", cs.exNonce, stratumVersion}
