@@ -272,6 +272,7 @@ func (s *ProxyServer) handleClient(w http.ResponseWriter, r *http.Request) error
 	return nil
 }
 
+// http
 func (cs *Session) handleMessage(s *ProxyServer, r *http.Request, req *JSONRpcReq) {
 	if req.Id == nil {
 		log.Println("Missing RPC id")

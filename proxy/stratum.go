@@ -123,12 +123,14 @@ func (cs *Session) handleTCPMessage(s *ProxyServer, req *StratumReq) error {
 			return cs.sendTCPError(req.Id, errReply)
 		}
 		return cs.sendTCPResult(req.Id, reply)
+
 	case "eth_getWork":
 		reply, errReply := s.handleTCPGetWorkRPC(cs)
 		if errReply != nil {
 			return cs.sendTCPError(req.Id, errReply)
 		}
 		return cs.sendTCPResult(req.Id, &reply)
+
 	case "eth_submitWork":
 		var params []string
 		err := json.Unmarshal(req.Params, &params)
@@ -141,7 +143,16 @@ func (cs *Session) handleTCPMessage(s *ProxyServer, req *StratumReq) error {
 			return cs.sendTCPError(req.Id, errReply)
 		}
 		return cs.sendTCPResult(req.Id, &reply)
+
 	case "eth_submitHashrate":
+		// todo: add static for hashrate
+		var replyBool bool
+
+		err := s.UpstreamTCP.Call("eth_submitHashrate", req.Params, &replyBool)
+		if err != nil {
+			log.Fatal("rpc call error: ", err)
+		}
+		log.Printf("submit Hashrate: %s, return: %v", req.Params, replyBool)
 		return cs.sendTCPResult(req.Id, true)
 
 	case "mining.subscribe":

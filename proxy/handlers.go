@@ -96,7 +96,16 @@ func (s *ProxyServer) handleETHSubmitWorkRPC(cs *Session, id string, params []st
 	if !ok {
 		return false, &ErrorReply{Code: 25, Message: "Not subscribed"}
 	}
-	return s.handleSubmitRPC(cs, cs.login, id, params)
+
+	// todo: need to add count for shares
+	var replyBool bool
+	err := s.UpstreamTCP.Call("eth_submitWork", params, &replyBool)
+	if err != nil {
+		log.Fatal("rpc call error: ", err)
+	}
+	log.Printf("eth_submitWork: %v, return: %v", params, replyBool)
+
+	return replyBool, nil
 }
 
 func (s *ProxyServer) handleTCPMiningSubmitRPC(cs *Session, id string, params []string) (bool, *ErrorReply) {
