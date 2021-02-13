@@ -89,6 +89,7 @@ func (s *ProxyServer) handleTCPGetWorkRPC(cs *Session) ([]string, *ErrorReply) {
 
 // Stratum
 func (s *ProxyServer) handleETHSubmitWorkRPC(cs *Session, id string, params []string) (bool, *ErrorReply) {
+	start := time.Now()
 	s.sessionsMu.RLock()
 	_, ok := s.sessions[cs]
 	s.sessionsMu.RUnlock()
@@ -98,14 +99,10 @@ func (s *ProxyServer) handleETHSubmitWorkRPC(cs *Session, id string, params []st
 	}
 
 	// todo: need to add count for shares
-	var replyBool bool
-	err := s.UpstreamTCP.Call("eth_submitWork", params, &replyBool)
-	if err != nil {
-		log.Fatal("rpc call error: ", err)
-	}
-	log.Printf("eth_submitWork: %v, return: %v", params, replyBool)
+	s.sendETHProxySubmitWork(params)
+	GRStat.TotalShareSubmitTime += time.Since(start).Microseconds()
 
-	return replyBool, nil
+	return true, nil
 }
 
 func (s *ProxyServer) handleTCPMiningSubmitRPC(cs *Session, id string, params []string) (bool, *ErrorReply) {
@@ -128,17 +125,11 @@ func (s *ProxyServer) handleTCPMiningHashrateRPC(cs *Session, id string, params 
 		return false, &ErrorReply{Code: 25, Message: "Not subscribed"}
 	}
 
-	var replyBool bool
 	t := s.currentBlockTemplate()
 	// todo: second param should be a rand string
 	rate := []string{params[0], t.Header}
-	err := s.UpstreamTCP.Call("eth_submitHashrate", rate, &replyBool)
-	if err != nil {
-		log.Fatal("rpc call error: ", err)
-	}
-	log.Printf("submit Hashrate: %v, return: %v", rate, replyBool)
-
-	return replyBool, nil
+	s.sendETHProxySubmitHashRate(rate)
+	return true, nil
 }
 
 func (s *ProxyServer) handleTCPMiningHelloRPC(cs *Session, id string, params map[string]string) (map[string]string, *ErrorReply) {
@@ -218,17 +209,12 @@ func (s *ProxyServer) handleMiningSubmitRPC(cs *Session, login, id string, param
 		log.Fatal("generate mix error!")
 	}
 
-	work := []interface{}{nonce, hash, mixDigest}
-	var replyBool bool
-	err := s.UpstreamTCP.Call("eth_submitWork", work, &replyBool)
-	if err != nil {
-		log.Fatal("rpc call error: ", err)
-	}
-	log.Printf("submit work: %v, return: %v, time: %s", work, replyBool, time.Since(start))
-	GRStat.TotalShares++
+	work := []string{nonce, hash, string(mixDigest[:])}
+
+	s.sendETHProxySubmitWork(work)
 	GRStat.TotalShareSubmitTime += time.Since(start).Microseconds()
 
-	return replyBool, nil
+	return true, nil
 }
 
 func (s *ProxyServer) handleGetBlockByNumberRPC() *httprpc.GetBlockReplyPart {
@@ -284,4 +270,23 @@ func (s *ProxyServer) handleTCPSubscribeV2RPC(cs *Session, params string, id str
 	cs.exNonce = s.generateExNonce()
 	log.Printf("Stratum V2 miner subscribe %v %v", cs.ip, cs.exNonce)
 	return "s-" + cs.exNonce, nil
+}
+
+func (s *ProxyServer) sendETHProxySubmitWork(work []string) {
+	var replyBool bool
+	err := s.UpstreamTCP.Call("eth_submitWork", work, &replyBool)
+	if err != nil {
+		log.Fatal("rpc call error: ", err)
+	}
+	// log.Printf("submit work: %v, return: %v, time: %s", work, replyBool, time.Since(start))
+	GRStat.TotalShares++
+}
+
+func (s *ProxyServer) sendETHProxySubmitHashRate(rate []string) {
+	var replyBool bool
+	err := s.UpstreamTCP.Call("eth_submitHashrate", rate, &replyBool)
+	if err != nil {
+		log.Fatal("rpc call error: ", err)
+	}
+	// log.Printf("submit Hashrate: %v, return: %v", rate, replyBool)
 }

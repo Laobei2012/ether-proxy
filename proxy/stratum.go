@@ -146,13 +146,14 @@ func (cs *Session) handleTCPMessage(s *ProxyServer, req *StratumReq) error {
 
 	case "eth_submitHashrate":
 		// todo: add static for hashrate
-		var replyBool bool
-
-		err := s.UpstreamTCP.Call("eth_submitHashrate", req.Params, &replyBool)
+		var params []string
+		err := json.Unmarshal(req.Params, &params)
 		if err != nil {
-			log.Fatal("rpc call error: ", err)
+			log.Printf("eth_submitHashrate Malformed stratum request params from %s, %v", cs.ip, req.Params)
+			return err
 		}
-		log.Printf("submit Hashrate: %s, return: %v", req.Params, replyBool)
+		s.sendETHProxySubmitHashRate(params)
+
 		return cs.sendTCPResult(req.Id, true)
 
 	case "mining.subscribe":
