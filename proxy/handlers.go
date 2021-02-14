@@ -97,12 +97,13 @@ func (s *ProxyServer) handleETHSubmitWorkRPC(cs *Session, id string, params []st
 	if !ok {
 		return false, &ErrorReply{Code: 25, Message: "Not subscribed"}
 	}
+	log.Printf("time for submit work: %d", time.Since(start).Nanoseconds())
 
 	// todo: need to add count for shares
-	s.sendETHProxySubmitWork(params)
+	ret := s.sendETHProxySubmitWork(params)
 	GRStat.TotalShareSubmitTime += time.Since(start).Microseconds()
 
-	return true, nil
+	return ret, nil
 }
 
 func (s *ProxyServer) handleTCPMiningSubmitRPC(cs *Session, id string, params []string) (bool, *ErrorReply) {
@@ -272,21 +273,24 @@ func (s *ProxyServer) handleTCPSubscribeV2RPC(cs *Session, params string, id str
 	return "s-" + cs.exNonce, nil
 }
 
-func (s *ProxyServer) sendETHProxySubmitWork(work []string) {
+func (s *ProxyServer) sendETHProxySubmitWork(work []string) bool {
 	var replyBool bool
 	err := s.UpstreamTCP.Call("eth_submitWork", work, &replyBool)
+	// todo , retry on error
 	if err != nil {
-		log.Fatal("rpc call error: ", err)
+		log.Printf("rpc call error: %s", err)
 	}
 	// log.Printf("submit work: %v, return: %v, time: %s", work, replyBool, time.Since(start))
 	GRStat.TotalShares++
+	return replyBool
 }
 
 func (s *ProxyServer) sendETHProxySubmitHashRate(rate []string) {
+	start := time.Now()
 	var replyBool bool
 	err := s.UpstreamTCP.Call("eth_submitHashrate", rate, &replyBool)
 	if err != nil {
-		log.Fatal("rpc call error: ", err)
+		log.Printf("rpc call error: %s", err)
 	}
-	// log.Printf("submit Hashrate: %v, return: %v", rate, replyBool)
+	log.Printf("submit Hashrate in %d ms", time.Since(start).Milliseconds())
 }
