@@ -93,7 +93,7 @@ func (s *ProxyServer) handleTCPClient(cs *Session) error {
 				err = json.Unmarshal(data, &reqWithoutWorker)
 				if err != nil {
 					// s.policy.ApplyMalformedPolicy(cs.ip)
-					log.Printf("Malformed stratum request from %s: %v", cs.ip, err)
+					log.Printf("Malformed stratum request from %s: %v, %s", cs.ip, err, data)
 					return err
 				}
 				req = StratumReq{JSONRpcReq: reqWithoutWorker, Worker: "0"}

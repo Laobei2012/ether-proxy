@@ -292,5 +292,8 @@ func (s *ProxyServer) sendETHProxySubmitHashRate(rate []string) {
 	if err != nil {
 		log.Printf("rpc call error: %s", err)
 	}
+	GRStat.TotalRateSubmitTime += time.Since(start).Microseconds()
+	GRStat.TotalRateSubmit++
+
 	log.Printf("submit Hashrate in %d ms", time.Since(start).Milliseconds())
 }

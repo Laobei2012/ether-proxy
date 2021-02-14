@@ -68,6 +68,8 @@ type RuningStat struct {
 	TotalShares          int64
 	TotalShareSubmitTime int64
 	TotalJobs            int64
+	TotalRateSubmit      int64
+	TotalRateSubmitTime  int64
 }
 
 var (
@@ -184,13 +186,15 @@ func NewEndpoint(cfg *Config) *ProxyServer {
 						avgSubmit = (GRStat.TotalShareSubmitTime - lastStat.TotalShareSubmitTime) /
 							(GRStat.TotalShares - lastStat.TotalShares) / 1000
 					}
-					log.Printf("Runing info: clients:%v, cast:%v, avgCast(us):%v(%v), jobs:%v(%v), shares:%v(%v), avgSubmit(ms):%v(%v)",
+					avgRateSubmit := GRStat.TotalRateSubmitTime - lastStat.TotalRateSubmitTime/(GRStat.TotalRateSubmit-lastStat.TotalRateSubmit)
+					totalAvgRateSubmit := GRStat.TotalRateSubmitTime / GRStat.TotalRateSubmit / 1000
+					log.Printf("Runing info: clients:%v, cast:%v/%vus(%vus), jobs:%v(%v), shares:%v/%vms(%v/%vms), rateSubmit(ms):%v/%v",
 						len(proxy.sessions),
 						GRStat.TotalBroadcasts-lastStat.TotalBroadcasts,
 						avgCast, totalAvgCast,
 						GRStat.TotalJobs-lastStat.TotalJobs, GRStat.TotalJobs,
-						GRStat.TotalShares-lastStat.TotalShares, GRStat.TotalShares,
-						avgSubmit, totalAvgSubmit,
+						GRStat.TotalShares-lastStat.TotalShares, avgSubmit, GRStat.TotalShares,
+						totalAvgSubmit, avgRateSubmit, totalAvgRateSubmit,
 					)
 				} else {
 					log.Printf("Runing info: clients:%v, cast:%v, avgCast(us):%v, jobs:%v, shares:%v, avgSubmit(ms):%v",
