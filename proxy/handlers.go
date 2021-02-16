@@ -295,5 +295,5 @@ func (s *ProxyServer) sendETHProxySubmitHashRate(rate []string) {
 	GRStat.TotalRateSubmitTime += time.Since(start).Microseconds()
 	GRStat.TotalRateSubmit++
 
-	log.Printf("submit Hashrate in %d ms", time.Since(start).Milliseconds())
+	// log.Printf("submit Hashrate in %d ms", time.Since(start).Milliseconds())
 }

@@ -168,7 +168,7 @@ func NewEndpoint(cfg *Config) *ProxyServer {
 			case <-runingTimerMin.C:
 				currentMin := time.Now().Unix() / 60
 				lastStatI, err := GRStatByMin.Get(currentMin - 1)
-				avgCast, avgSubmit, totalAvgCast, totalAvgSubmit := int64(0), int64(0), int64(0), int64(0)
+				avgCast, avgSubmit, totalAvgCast, totalAvgSubmit, avgRateSubmit := int64(0), int64(0), int64(0), int64(0), int64(0)
 				if GRStat.TotalBroadcasts > 0 {
 					totalAvgCast = GRStat.TotalBroadcastTime / GRStat.TotalBroadcasts
 				}
@@ -186,7 +186,9 @@ func NewEndpoint(cfg *Config) *ProxyServer {
 						avgSubmit = (GRStat.TotalShareSubmitTime - lastStat.TotalShareSubmitTime) /
 							(GRStat.TotalShares - lastStat.TotalShares) / 1000
 					}
-					avgRateSubmit := GRStat.TotalRateSubmitTime - lastStat.TotalRateSubmitTime/(GRStat.TotalRateSubmit-lastStat.TotalRateSubmit)
+					if GRStat.TotalRateSubmit-lastStat.TotalRateSubmit > 0 {
+						avgRateSubmit = (GRStat.TotalRateSubmitTime - lastStat.TotalRateSubmitTime) / (GRStat.TotalRateSubmit - lastStat.TotalRateSubmit) / 1000
+					}
 					totalAvgRateSubmit := GRStat.TotalRateSubmitTime / GRStat.TotalRateSubmit / 1000
 					log.Printf("Runing info: clients:%v, cast:%v/%vus(%vus), jobs:%v(%v), shares:%v/%vms(%v/%vms), rateSubmit(ms):%v/%v",
 						len(proxy.sessions),
