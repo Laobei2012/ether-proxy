@@ -10,6 +10,7 @@ import (
 	"net"
 	"strconv"
 	"time"
+	"crypto/tls"
 
 	"../util"
 )
@@ -42,6 +43,62 @@ func (s *ProxyServer) ListenTCP() {
 			continue
 		}
 		conn.SetKeepAlive(true)
+
+		ip, _, _ := net.SplitHostPort(conn.RemoteAddr().String())
+		// log.Printf("AcceptTCP: %v", ip)
+
+		// if s.policy.IsBanned(ip) || !s.policy.ApplyLimitPolicy(ip) {
+		// 	conn.Close()
+		// 	continue
+		// }
+		n += 1
+		cs := &Session{conn: conn, ip: ip}
+
+		accept <- n
+		go func(cs *Session) {
+			err = s.handleTCPClient(cs)
+			if err != nil {
+				s.removeSession(cs)
+				conn.Close()
+			}
+			<-accept
+		}(cs)
+	}
+}
+
+func (s *ProxyServer) ListenTLS() {
+	timeout := util.MustParseDuration(s.config.Proxy.Stratum.Timeout)
+	s.timeout = timeout
+
+	// addr, err := net.ResolveTCPAddr("tcp", s.config.Proxy.TLS.Listen)
+	// if err != nil {
+	// 	log.Fatalf("Error: %v", err)
+	// }
+
+	cert, err := tls.LoadX509KeyPair(s.config.Proxy.TLS.PemFile, s.config.Proxy.TLS.KeyFile)
+	if err != nil {
+		log.Fatalf("Error: %v", err)
+		return
+	}
+	config := &tls.Config{Certificates: []tls.Certificate{cert}}
+	ln, err := tls.Listen("tcp", s.config.Proxy.TLS.Listen, config)
+	if err != nil {
+		log.Fatalf("Error: %v", err)
+		return
+	}
+	defer ln.Close()
+
+	log.Printf("Stratum TLS listening on %s", s.config.Proxy.TLS.Listen)
+	var accept = make(chan int, s.config.Proxy.Stratum.MaxConn)
+	n := 0
+
+	for {
+		conn, err := ln.Accept()
+		if err != nil {
+			log.Printf("Accept Error: %v", err)
+			continue
+		}
+		// conn.SetKeepAlive(true)
 
 		ip, _, _ := net.SplitHostPort(conn.RemoteAddr().String())
 		// log.Printf("AcceptTCP: %v", ip)
@@ -343,7 +400,7 @@ func (cs *Session) sendTCPError(id json.RawMessage, reply *ErrorReply) error {
 	return errors.New(reply.Message)
 }
 
-func (self *ProxyServer) setDeadline(conn *net.TCPConn) {
+func (self *ProxyServer) setDeadline(conn net.Conn) {
 	conn.SetDeadline(time.Now().Add(self.timeout))
 }
 

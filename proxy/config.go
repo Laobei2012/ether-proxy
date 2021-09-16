@@ -29,6 +29,14 @@ type Proxy struct {
 	HealthCheck bool  `json:"healthCheck"`
 
 	Stratum Stratum `json:"stratum"`
+	TLS     TLS     `json:"tls"`
+}
+
+type TLS struct {
+	Enabled bool   `json:"enabled"`
+	Listen  string `json:"listen"`
+	PemFile string `json:"pemFile"`
+	KeyFile string `json:"keyFile"`
 }
 
 type Stratum struct {

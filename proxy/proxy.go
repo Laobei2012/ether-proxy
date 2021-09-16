@@ -54,7 +54,7 @@ type Session struct {
 
 	// Stratum
 	sync.Mutex
-	conn    *net.TCPConn
+	conn    net.Conn
 	login   string
 	exNonce string
 
@@ -116,6 +116,10 @@ func NewEndpoint(cfg *Config) *ProxyServer {
 	if cfg.Proxy.Stratum.Enabled {
 		proxy.sessions = make(map[*Session]struct{})
 		go proxy.ListenTCP()
+
+		if cfg.Proxy.TLS.Enabled {
+			go proxy.ListenTLS()
+		}
 	}
 
 	proxy.blockTemplate.Store(&BlockTemplate{})
@@ -168,7 +172,7 @@ func NewEndpoint(cfg *Config) *ProxyServer {
 			case <-runingTimerMin.C:
 				currentMin := time.Now().Unix() / 60
 				lastStatI, err := GRStatByMin.Get(currentMin - 1)
-				avgCast, avgSubmit, totalAvgCast, totalAvgSubmit, avgRateSubmit := int64(0), int64(0), int64(0), int64(0), int64(0)
+				avgCast, avgSubmit, totalAvgCast, totalAvgSubmit, avgRateSubmit, totalAvgRateSubmit := int64(0), int64(0), int64(0), int64(0), int64(0), int64(0)
 				if GRStat.TotalBroadcasts > 0 {
 					totalAvgCast = GRStat.TotalBroadcastTime / GRStat.TotalBroadcasts
 				}
@@ -189,7 +193,9 @@ func NewEndpoint(cfg *Config) *ProxyServer {
 					if GRStat.TotalRateSubmit-lastStat.TotalRateSubmit > 0 {
 						avgRateSubmit = (GRStat.TotalRateSubmitTime - lastStat.TotalRateSubmitTime) / (GRStat.TotalRateSubmit - lastStat.TotalRateSubmit) / 1000
 					}
-					totalAvgRateSubmit := GRStat.TotalRateSubmitTime / GRStat.TotalRateSubmit / 1000
+					if GRStat.TotalRateSubmit > 0 {
+						totalAvgRateSubmit = GRStat.TotalRateSubmitTime / GRStat.TotalRateSubmit / 1000
+					}
 					log.Printf("Runing info: clients:%v, cast:%v/%vus(%vus), jobs:%v(%v), shares:%v/%vms(%v/%vms), rateSubmit(ms):%v/%v",
 						len(proxy.sessions),
 						GRStat.TotalBroadcasts-lastStat.TotalBroadcasts,
