@@ -118,7 +118,8 @@ func startPool(server *proxy.ProxyServer) {
 	for {
 		conn, err := net.DialTimeout("tcp", pool.Host+":"+pool.Port, 1000*1000*1000*30)
 		if err != nil {
-			os.Exit(-1)
+			log.Fatalf("connect to pool failed: %s", err)
+			// os.Exit(-1)
 		}
 		log.Printf("connected %v:%v", pool.Host, pool.Port)
 
@@ -161,12 +162,12 @@ func startPool(server *proxy.ProxyServer) {
 		}
 		log.Printf("login with: %v", pool.User)
 
-		var replyArray []interface{}
-		err = clientRPC.Call("eth_getWork", []string{""}, &replyArray)
-		if err != nil {
-			log.Fatal("rpc call error: ", err)
-		}
-		log.Printf("getwork return: %v", replyArray)
+		// var replyArray []interface{}
+		// err = clientRPC.Call("eth_getWork", []string{""}, &replyArray)
+		// if err != nil {
+		// 	log.Fatal("rpc call error: ", err)
+		// }
+		// log.Printf("getwork return: %v", replyArray)
 		/*/
 		var clientInfo = [...]string{"ethminer-0.19.0", "EthereumStratum/1.0.0"}
 		var subscribeReply []interface{}
@@ -223,7 +224,9 @@ func main() {
 	// log.SetOutput(f)
 
 	readConfig(&cfg)
+	// go agent.StartMQTTClient()
 	// startNewrelic()
 	s := startProxy()
 	startPool(s)
+
 }

@@ -97,10 +97,10 @@ func (s *ProxyServer) handleETHSubmitWorkRPC(cs *Session, id string, params []st
 	if !ok {
 		return false, &ErrorReply{Code: 25, Message: "Not subscribed"}
 	}
-	log.Printf("time for submit work: %d", time.Since(start).Nanoseconds())
 
 	// todo: need to add count for shares
 	ret := s.sendETHProxySubmitWork(params)
+	log.Printf("time for submit work: %d", time.Since(start).Nanoseconds())
 	GRStat.TotalShareSubmitTime += time.Since(start).Microseconds()
 
 	return ret, nil

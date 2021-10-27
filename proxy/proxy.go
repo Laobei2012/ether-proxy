@@ -139,11 +139,12 @@ func NewEndpoint(cfg *Config) *ProxyServer {
 		log.Printf("eth-proxy Upstream")
 
 	case "http":
+		log.Printf("http Upstream")
 		proxy.upstreams = make([]*httprpc.RPCClient, len(cfg.Upstream))
 		for i, v := range cfg.Upstream {
 			client, err := httprpc.NewRPCClient(v.Name, v.Url, v.Timeout, v.Pool)
 			if err != nil {
-				log.Fatal(err)
+				log.Fatalf("new rpc client error: %s", err)
 			} else {
 				proxy.upstreams[i] = client
 				log.Printf("http Upstream: %s => %s", v.Name, v.Url)
