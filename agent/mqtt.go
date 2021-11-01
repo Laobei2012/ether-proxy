@@ -14,7 +14,7 @@ import (
 	"strings"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
-	"gopkg.in/robfig/cron.v3"
+	"github.com/robfig/cron/v3"
 )
 
 type PayloadExec struct {

@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"../httprpc"
-	"../util"
+	"bos/httprpc"
+	"bos/util"
 	"github.com/ethereum/go-ethereum/common"
 )
 

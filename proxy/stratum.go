@@ -12,7 +12,7 @@ import (
 	"strconv"
 	"time"
 
-	"../util"
+	"bos/util"
 )
 
 // const (

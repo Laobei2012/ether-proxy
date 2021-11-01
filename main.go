@@ -16,8 +16,8 @@ import (
 	"strings"
 	"time"
 
-	"./agent"
-	"./proxy"
+	"bos/agent"
+	"bos/proxy"
 
 	"github.com/goji/httpauth"
 	"github.com/gorilla/mux"

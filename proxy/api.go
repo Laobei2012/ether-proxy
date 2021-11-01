@@ -6,8 +6,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"../httprpc"
-	"../util"
+	"bos/httprpc"
+	"bos/util"
 )
 
 func (s *ProxyServer) StatsIndex(w http.ResponseWriter, r *http.Request) {
