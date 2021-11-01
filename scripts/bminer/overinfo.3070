@@ -1,0 +1,1 @@
+{"oc_type": "oc_tpl", "oc_info": {"cpu":{"frequency":[50,100,50,100,-1]},"fan":{"GPUTargetFanSpeed":[0,100,80,90,80]},"gpus":{"NVIDIA GeForce RTX 3070":{"ethash":{"GPUClock":800,"GPUGraphicsClockOffset":0,"GPUMemoryTransferRateOffset":2200,"PowerLimit":129},"gpuType":"N","level":-1}},"version":3}, "algorithm": "ethash"}

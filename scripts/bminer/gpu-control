@@ -1,0 +1,100 @@
+#!/usr/bin/env bash
+
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+. ${SCRIPT_DIR}/env.sh
+
+bminer_bin_path=${BMINER_BIN_PATH-"/opt/bminer/bin"}
+gpu_status_pid=${GPU_STATUS_PID-"${BMINER_RUN_PATH}/gpu_status_pid"}
+gpu_fan_pid=${GPU_FAN_PID-"${BMINER_RUN_PATH}/gpu_fan_pid"}
+gpu_status_for_agent="${BMINER_RUN_PATH}/.gpuinfo"
+
+export PATH=$PATH:$bminer_bin_path
+
+test -d ${BMINER_RUN_PATH} || mkdir -p ${BMINER_RUN_PATH}
+. $bminer_bin_path/common.sh
+
+if [ $(_platform) == "amd" ];then
+    . $bminer_bin_path/amd.sh
+else
+    . $bminer_bin_path/nvidia.sh
+fi
+
+# agent 从这里获取platform信息
+echo $(_platform) > ${BMINER_RUN_PATH}/platform
+
+. $bminer_bin_path/overclock.sh
+
+
+_refresh(){
+    local gpu_json='{}' idx=0
+    while read -r gpu
+    do
+        gpuid=$(echo $gpu | jq -c '.gpuid')
+        mem=$(echo $gpu | jq -c .max_mem_size 2>/dev/null | sed 's/null/0/')
+        [[ $mem -gt 0 ]] && ((idx++))
+        local gkey="GPU${gpuid}"
+        if [ ! -z "$gpu" ]; then
+            tmp=$(echo $gpu_json | jq -c --argjson onegpu "$gpu" '.'${gkey}'=$onegpu')
+            gpu_json=$tmp
+        fi
+
+    done <<< $(_gpuinfo_status|jq -c ".[]")
+    echo $gpu_json > $gpu_status_for_agent
+
+    if [ ! -f ${BMINER_RUN_PATH}/report ];then
+        enable_counts=$(echo $gpu_json | jq -r '.[] | select(.disable==0) | .bus_id '  2>/dev/null | wc -l )
+        # 信息完整后，上报
+        if [[ $enable_counts -gt 0 ]] && [[ $enable_counts -le $idx ]];then 
+            _driver_notry $((gpu_try_counts+idx))
+            # 本次不上报，写下次上报标记，因为agent可能还没从读取到更新
+            echo 1 > ${BMINER_RUN_PATH}/report 
+        # try达到上限，上报
+        elif ! _driver_try $gpu_try_counts;then
+            echo 1 >  ${BMINER_RUN_PATH}/report
+        fi
+    else
+        report=$(cat ${BMINER_RUN_PATH}/report)
+        # 上报，并标记已上报
+        [[ $report -eq 1 ]] && _report_gpu_info && echo 2 > ${BMINER_RUN_PATH}/report
+    fi
+    exit 0
+}
+
+case $1 in
+    detect)
+        _gpuinfo_info
+    ;;
+
+    refresh)
+        _lock ${BMINER_RUN_PATH}/refresh.lock || exit 0
+        _refresh
+    ;;
+
+    status)
+        if [ ! -f $gpu_status_for_agent ]; then
+            echo "no gpu found"
+            exit 0
+        fi
+        shift
+        _format_status $@
+    ;;
+
+    oc)
+        shift
+        _lock ${BMINER_RUN_PATH}/oc.lock || exit 0
+        for i in `seq 0 5`;do
+            _gpu_overclock $@ && break
+            sleep 3
+        done
+    ;;
+
+    fan)
+        _lock ${BMINER_RUN_PATH}/fan.lock || exit 0
+        _fan_control
+    ;;
+
+    *)
+        echo "do nothing"
+    ;;
+
+esac

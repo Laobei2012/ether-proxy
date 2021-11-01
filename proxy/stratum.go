@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"bufio"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -10,7 +11,6 @@ import (
 	"net"
 	"strconv"
 	"time"
-	"crypto/tls"
 
 	"../util"
 )
@@ -134,7 +134,7 @@ func (s *ProxyServer) handleTCPClient(cs *Session) error {
 			// s.policy.BanClient(cs.ip)
 			return err
 		} else if err == io.EOF {
-			log.Printf("Client %s disconnected", cs.ip)
+			// log.Printf("Client %s disconnected", cs.ip)
 			s.removeSession(cs)
 			break
 		} else if err != nil {
@@ -175,6 +175,7 @@ func (cs *Session) handleTCPMessage(s *ProxyServer, req *StratumReq) error {
 			log.Printf("eth_submitLogin Malformed stratum request params from %s, %v", cs.ip, req.Params)
 			return err
 		}
+		// todo : replace worker with param
 		reply, errReply := s.handleLoginRPC(cs, params, req.Worker)
 		if errReply != nil {
 			return cs.sendTCPError(req.Id, errReply)

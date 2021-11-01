@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"flag"
 	"io"
 	"log"
 	"net"
@@ -15,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"./agent"
 	"./proxy"
 
 	"github.com/goji/httpauth"
@@ -75,11 +77,7 @@ func startNewrelic() {
 	}
 }
 
-func readConfig(cfg *proxy.Config) {
-	configFileName := "config.json"
-	if len(os.Args) > 1 {
-		configFileName = os.Args[1]
-	}
+func readConfig(cfg *proxy.Config, configFileName string) {
 	configFileName, _ = filepath.Abs(configFileName)
 	log.Printf("Loading config: %v", configFileName)
 
@@ -208,13 +206,13 @@ func startPool(server *proxy.ProxyServer) {
 }
 
 func main() {
-	// var hasher = ethash.New()
-	// x := hasher.MakeSeedHash(10757149 / 30000)
+	var cliMode = flag.Int("mode", 0, "agent running mode")
+	var cliConfigFile = flag.String("config", "config.json", "agent config file")
+	var cliLogPath = flag.String("logPath", "./", "agent log file path")
 
-	// log.Printf("seedhash, %v ", x)
+	flag.Parse()
 
-	// todo: print to console too...
-	f, err := os.OpenFile(time.Now().Format("2006-01-02")+".log", os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
+	f, err := os.OpenFile(*cliLogPath+"/agent-"+time.Now().Format("2006-01-02")+".log", os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -223,10 +221,17 @@ func main() {
 	log.SetOutput(mw)
 	// log.SetOutput(f)
 
-	readConfig(&cfg)
-	// go agent.StartMQTTClient()
-	// startNewrelic()
-	s := startProxy()
-	startPool(s)
+	if *cliMode == 10 {
+		// proxy mode
+		readConfig(&cfg, *cliConfigFile)
+		// startNewrelic()
+		s := startProxy()
+		startPool(s)
+
+	} else {
+		// agent mode
+		agent.StartMQTTClient()
+
+	}
 
 }

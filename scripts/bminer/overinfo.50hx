@@ -1,0 +1,1 @@
+{"oc_type": "oc_tpl", "oc_info": {"cpu":{"frequency":[50,100,50,100,-1]},"fan":{"GPUTargetFanSpeed":[0,100,80,90,80]},"gpu":{"NVIDIA CMP 50HX":{"ethash":{"GPUClock":1100,"GPUGraphicsClockOffset":-300,"GPUMemoryTransferRateOffset":800,"PowerLimit":145},"gpuType":"N","level":-1}},"version":3}, "algorithm": "ethash"}
