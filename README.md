@@ -18,7 +18,9 @@ Ethereum (ethash) mining proxy with web-interface.
 
 Requires Go >= 1.16.
 
-    go build -ldflags="-s -w" -o ether-proxy main.go
+    ./build.sh        # builds dist/ether-proxy and dist/rig-agent
+
+or individually: `go build ./cmd/ether-proxy`, `go build ./cmd/rig-agent`.
 
 The files under `lib/` are modified copies of `net/rpc` and `ethash`. They are not needed
 for a normal module build; don't copy them over your system Go installation unless you
@@ -52,20 +54,24 @@ With <code>"submitHashrate": true|false</code> proxy will forward <code>eth_subm
 
 #### Running
 
-    ./ether-proxy -mode 10 -config config.json
+    ./ether-proxy -config config.json
 
 #### Mining
 
     ethminer -F http://x.x.x.x:8546/miner/5/gpu-rig -G
     ethminer -F http://x.x.x.x:8546/miner/0.1/cpu-rig -C
 
-### Agent mode (optional)
+### Rig agent (optional, separate binary)
 
-`-mode 0` runs a rig agent instead of the proxy. It reports hardware info, including the
-public IP (looked up via `ifconfig.co`), to an Alibaba Cloud MQTT broker every minute. It
-refuses to start unless the `agent` section of the config (broker, accessKey, secretKey,
-instanceId, groupId) is filled in. The proxy itself never connects to MQTT. The `exec` and
-`config` MQTT handlers only log the message; they execute nothing.
+`rig-agent` is an independent tool to install on each mining rig; it is not part of the
+proxy. It reports hardware info, including the public IP (looked up via `ifconfig.co`), to
+an Alibaba Cloud MQTT broker every minute, and calls `scripts/bminer/hw_info.sh` relative
+to its own executable. Copy *agent.example.json* to *agent.json* and fill in the broker
+credentials; it refuses to start without them.
+
+    ./rig-agent -config agent.json
+
+The `exec` and `config` MQTT handlers only log the message; they execute nothing.
 
 ### Credits and license
 

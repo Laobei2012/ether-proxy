@@ -1,9 +1,6 @@
-go build -ldflags="-s -w" -o agent.run  main.go
-~/go/bin/goupx agent.run
-
-rm dist.tar.gz
-cp agent.run dist
-cp config.json dist
-
-tar cvf dist.tar dist
-gzip dist.tar
+#!/bin/bash
+# Builds both binaries into ./dist
+set -e
+mkdir -p dist
+go build -ldflags="-s -w" -o dist/ether-proxy ./cmd/ether-proxy
+go build -ldflags="-s -w" -o dist/rig-agent ./cmd/rig-agent

@@ -4,3 +4,5 @@ ether-proxy
 ether-proxy.exe
 .vscode*
 *.log
+dist/
+agent.json

@@ -1,7 +1,5 @@
 package proxy
 
-import "ether-proxy/agent"
-
 type Config struct {
 	Proxy                     Proxy      `json:"proxy"`
 	Frontend                  Frontend   `json:"frontend"`
@@ -11,9 +9,6 @@ type Config struct {
 	UpstreamMaxNotifyInterval string     `json:"upstreamMaxNotifyInterval"`
 
 	Threads int `json:"threads"`
-
-	// Agent is only used in agent mode (-mode 0); the proxy never connects to MQTT.
-	Agent agent.Config `json:"agent"`
 
 	NewrelicName    string `json:"newrelicName"`
 	NewrelicKey     string `json:"newrelicKey"`

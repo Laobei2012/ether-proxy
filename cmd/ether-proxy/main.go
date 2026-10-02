@@ -16,7 +16,6 @@ import (
 	"strings"
 	"time"
 
-	"ether-proxy/agent"
 	"ether-proxy/proxy"
 
 	"github.com/goji/httpauth"
@@ -206,36 +205,21 @@ func startPool(server *proxy.ProxyServer) {
 }
 
 func main() {
-	var cliMode = flag.Int("mode", 0, "agent running mode")
-	var cliConfigFile = flag.String("config", "config.json", "agent config file")
-	var cliLogPath = flag.String("logPath", "./", "agent log file path")
+	var cliConfigFile = flag.String("config", "config.json", "proxy config file")
+	var cliLogPath = flag.String("logPath", "./", "proxy log file path")
 
 	flag.Parse()
 
-	f, err := os.OpenFile(*cliLogPath+"/agent-"+time.Now().Format("2006-01-02")+".log", os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
+	f, err := os.OpenFile(*cliLogPath+"/ether-proxy-"+time.Now().Format("2006-01-02")+".log", os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer f.Close()
 	mw := io.MultiWriter(os.Stdout, f)
 	log.SetOutput(mw)
-	// log.SetOutput(f)
 
-	if *cliMode == 10 {
-		// proxy mode
-		readConfig(&cfg, *cliConfigFile)
-		// startNewrelic()
-		s := startProxy()
-		startPool(s)
-
-	} else {
-		// agent mode
-		readConfig(&cfg, *cliConfigFile)
-		if cfg.Agent.Broker == "" || cfg.Agent.AccessKey == "" || cfg.Agent.SecretKey == "" {
-			log.Fatal("agent mode requires an \"agent\" section (broker, accessKey, secretKey, ...) in ", *cliConfigFile)
-		}
-		agent.StartMQTTClient(cfg.Agent)
-
-	}
-
+	readConfig(&cfg, *cliConfigFile)
+	// startNewrelic()
+	s := startProxy()
+	startPool(s)
 }
