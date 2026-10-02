@@ -20,14 +20,24 @@
 		"login": "admin",
 		"password": ""
 	},
+	"agent": {
+		"broker": "",
+		"port": 1883,
+		"accessKey": "",
+		"secretKey": "",
+		"instanceId": "",
+		"groupId": "",
+		"farm": "default",
+		"deviceId": "0001"
+	},
 	"upstreamCheckInterval": "5s",
 	"upstreamProto": "eth-proxy",
 	"upstreamMaxNotifyInterval": "1200s",
 	"upstream": [
 		{
 			"pool": true,
-			"name": "sparkpool",
-			"url": "//sp_miner2020.1234@cn.sparkpool.com:13333",
+			"name": "example-pool",
+			"url": "//YOUR_WALLET_OR_ACCOUNT@pool.example.com:4444",
 			"timeout": "10s"
 		}
 	]

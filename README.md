@@ -1,6 +1,6 @@
 # ether-proxy
 
-Ethereum mining proxy with web-interface.
+Ethereum (ethash) mining proxy with web-interface.
 
 **Proxy feature list:**
 
@@ -9,63 +9,24 @@ Ethereum mining proxy with web-interface.
 * Easy detection of sick rigs
 * Daemon failover list
 
-![Demo](https://raw.githubusercontent.com/sammy007/ether-proxy/master/proxy.png)
+![Demo](proxy.png)
 
-### Building on Linux
+> **Status:** Ethereum mainnet moved to proof of stake, so ethash mining no longer works
+> there. This project is kept for ethash-based chains and for reference.
 
-Dependencies:
+### Building
 
-  * go >= 1.4
-  * geth
-
-Export GOPATH:
-
-    export GOPATH=$HOME/go
-
-Install required packages:
-
-    go get github.com/ethereum/ethash
-    go get github.com/ethereum/go-ethereum/common
-    go get github.com/goji/httpauth
-    go get github.com/gorilla/mux
-    go get github.com/yvasiyarov/gorelic
-    
-    <!-- go get github.com/aristanetworks/goarista/monotime
-    go get github.com/deckarep/golang-set
-    go get github.com/go-stack/stack
-    go get github.com/gorilla/websocket
-    go get github.com/shirou/gopsutil/cpu -->
-
-
-    cp lib/src/github.com/ethereum/ethash/ethash.go ~/go/src/github.com/ethereum/ethash/ethash.go
-    #cp lib/libexec/src/net/rpc/client.go /usr/lib/golang/src/net/rpc/client.go
-    #cp lib/libexec/src/net/rpc/jsonrpc/client.go /usr/lib/golang/src/net/rpc/jsonrpc/client.go
-
-    sudo cp lib/libexec/src/net/rpc/client.go  /usr/share/go-1.13/src/net/rpc/client.go
-    sudo cp lib/libexec/src/net/rpc/jsonrpc/client.go /usr/share/go-1.13/src/net/rpc/jsonrpc/client.go
-
-Compile:
+Requires Go >= 1.16.
 
     go build -ldflags="-s -w" -o ether-proxy main.go
 
-### Building on Windows
-
-Follow [this wiki paragraph](https://github.com/ethereum/go-ethereum/wiki/Installation-instructions-for-Windows#building-from-source) in order to prepare your environment.
-Install required packages (look at Linux install guide above). Then compile:
-
-    go build -o ether-proxy.exe main.go
-
-### Building on Mac OS X
-
-If you didn't install [Brew](http://brew.sh/), do it. Then install Golang:
-
-    brew install go
-
-And follow Linux installation instructions because they are the same for OS X.
+The files under `lib/` are modified copies of `net/rpc` and `ethash`. They are not needed
+for a normal module build; don't copy them over your system Go installation unless you
+know you need the modified behaviour.
 
 ### Configuration
 
-Configuration is self-describing, just copy *config.example.json* to *config.json* and specify endpoint URL and upstream URLs.
+Copy *config.example.json* to *config.json* and set the listen addresses and upstream URLs.
 
 #### Example upstream section
 
@@ -73,8 +34,8 @@ Configuration is self-describing, just copy *config.example.json* to *config.jso
 "upstream": [
   {
     "pool": true,
-    "name": "EuroHash.net",
-    "url": "http://eth-eu.eurohash.net:8888/miner/0xb85150eb365e7df0941f0cf08235f987ba91506a/proxy",
+    "name": "Example pool",
+    "url": "http://pool.example.com:8888/miner/YOUR_WALLET/proxy",
     "timeout": "10s"
   },
   {
@@ -85,43 +46,28 @@ Configuration is self-describing, just copy *config.example.json* to *config.jso
 ],
 ```
 
-In this example we specified [EuroHash.net](https://eurohash.net) mining pool as main mining target and a local geth node as backup for solo.
+Here a mining pool is the main target and a local geth node is the solo backup.
 
 With <code>"submitHashrate": true|false</code> proxy will forward <code>eth_submitHashrate</code> requests to upstream.
 
 #### Running
 
-    ./ether-proxy config.json
+    ./ether-proxy -mode 10 -config config.json
 
 #### Mining
 
     ethminer -F http://x.x.x.x:8546/miner/5/gpu-rig -G
     ethminer -F http://x.x.x.x:8546/miner/0.1/cpu-rig -C
 
-### Pools that work with this proxy
+### Agent mode (optional)
 
-* [EuroHash.net](https://eurohash.net) EU Ethereum mining pool
-* [SuprNova.cc](https://eth.suprnova.cc) SuprNova ETH Pool
+`-mode 0` runs a rig agent instead of the proxy. It reports hardware info, including the
+public IP (looked up via `ifconfig.co`), to an Alibaba Cloud MQTT broker every minute. It
+refuses to start unless the `agent` section of the config (broker, accessKey, secretKey,
+instanceId, groupId) is filled in. The proxy itself never connects to MQTT. The `exec` and
+`config` MQTT handlers only log the message; they execute nothing.
 
-Pool owners, apply for listing here. PM me for implementation details.
+### Credits and license
 
-### TODO
-
-**Currently it's solo-only solution.**
-
-* Report block numbers
-* Report luck per rig
-* Maybe add more stats
-* Maybe add charts
-
-### Donations
-
-* **ETH**: [0xb85150eb365e7df0941f0cf08235f987ba91506a](https://etherchain.org/account/0xb85150eb365e7df0941f0cf08235f987ba91506a)
-
-* **BTC**: [1PYqZATFuYAKS65dbzrGhkrvoN9au7WBj8](https://blockchain.info/address/1PYqZATFuYAKS65dbzrGhkrvoN9au7WBj8)
-
-Thanks to a couple of dudes who donated some Ether to me, I believe, you can do the same.
-
-### License
-
-The MIT License (MIT).
+Forked from [sammy007/ether-proxy](https://github.com/sammy007/ether-proxy).
+MIT licensed, see `LICENSE`. Bundled third-party code is listed in `THIRD_PARTY.md`.

@@ -107,28 +107,40 @@ func reportOnStart(client mqtt.Client) {
 	}
 	log.Printf("hw_info out:\n%s\nerr:\n%s", stdout.String(), stderr.String())
 
-	var topic = "bos/data/" + FARM + "/" + DEVICEID + "/report"
+	var topic = "ether-proxy/data/" + FARM + "/" + DEVICEID + "/report"
 	publish(client, topic, stdout.String())
 }
 
-func StartMQTTClient() {
+// Config holds the MQTT broker settings (Alibaba Cloud MQTT signature auth).
+type Config struct {
+	Broker     string `json:"broker"`
+	Port       int    `json:"port"`
+	AccessKey  string `json:"accessKey"`
+	SecretKey  string `json:"secretKey"`
+	InstanceId string `json:"instanceId"`
+	GroupId    string `json:"groupId"`
+	Farm       string `json:"farm"`
+	DeviceId   string `json:"deviceId"`
+}
+
+func StartMQTTClient(cfg Config) {
 	ex, err := os.Executable()
 	if err != nil {
 		log.Println(err)
 	}
 	CURRENT_PATH = filepath.Dir(ex)
-	FARM = "default"
-	DEVICEID = "0011"
+	FARM = cfg.Farm
+	DEVICEID = cfg.DeviceId
 
 	log.Println("starting MQTT client at ", CURRENT_PATH)
 	c := make(chan os.Signal, 1)
 
-	var broker = "mqtt-cn-zvp2f141s0i.mqtt.aliyuncs.com"
-	var port = 1883
-	var accessKey = "LTAI5tEn9BLvScdXZcvGXDVQ"
-	var secretKey = "Jzvho1IB1pJjWh5HwTqvuJNJZIlWDl"
-	var instanceId = "mqtt-cn-zvp2f141s0i"
-	var groupId = "GID_szmqtt"
+	var broker = cfg.Broker
+	var port = cfg.Port
+	var accessKey = cfg.AccessKey
+	var secretKey = cfg.SecretKey
+	var instanceId = cfg.InstanceId
+	var groupId = cfg.GroupId
 	var clientId = groupId + "@@@" + DEVICEID
 
 	var userName = "Signature" + "|" + accessKey + "|" + instanceId
@@ -148,7 +160,7 @@ func StartMQTTClient() {
 		panic(token.Error())
 	}
 
-	var subTopic = "bos/cmd/" + FARM + "/" + DEVICEID + "/+"
+	var subTopic = "ether-proxy/cmd/" + FARM + "/" + DEVICEID + "/+"
 	subscribe(client, subTopic)
 
 	crontab := cron.New()

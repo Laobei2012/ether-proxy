@@ -17,8 +17,8 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/gorilla/mux"
 
-	"bos/httprpc"
-	"bos/util"
+	"ether-proxy/httprpc"
+	"ether-proxy/util"
 )
 
 type ProxyServer struct {

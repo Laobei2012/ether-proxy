@@ -12,7 +12,7 @@ import (
 	"strconv"
 	"time"
 
-	"bos/util"
+	"ether-proxy/util"
 )
 
 // const (

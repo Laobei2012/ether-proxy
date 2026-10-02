@@ -9,7 +9,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"bos/util"
+	"ether-proxy/util"
 
 	"github.com/ethereum/go-ethereum/common"
 )

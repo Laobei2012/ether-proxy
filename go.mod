@@ -1,4 +1,4 @@
-module bos
+module ether-proxy
 
 go 1.16
 

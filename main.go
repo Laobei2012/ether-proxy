@@ -16,8 +16,8 @@ import (
 	"strings"
 	"time"
 
-	"bos/agent"
-	"bos/proxy"
+	"ether-proxy/agent"
+	"ether-proxy/proxy"
 
 	"github.com/goji/httpauth"
 	"github.com/gorilla/mux"
@@ -230,7 +230,11 @@ func main() {
 
 	} else {
 		// agent mode
-		agent.StartMQTTClient()
+		readConfig(&cfg, *cliConfigFile)
+		if cfg.Agent.Broker == "" || cfg.Agent.AccessKey == "" || cfg.Agent.SecretKey == "" {
+			log.Fatal("agent mode requires an \"agent\" section (broker, accessKey, secretKey, ...) in ", *cliConfigFile)
+		}
+		agent.StartMQTTClient(cfg.Agent)
 
 	}
 

@@ -6,8 +6,8 @@ import (
 	"strconv"
 	"strings"
 
-	"bos/httprpc"
-	"bos/util"
+	"ether-proxy/httprpc"
+	"ether-proxy/util"
 
 	"github.com/ethereum/go-ethereum/common"
 )
